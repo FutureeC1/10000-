@@ -173,6 +173,15 @@ class ShopRepository:
         return dict(row) if row else None
 
     @staticmethod
+    def get_shop_by_name(name: str) -> Optional[dict]:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM shops WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @staticmethod
     def get_shops_by_owner(owner_id: int) -> List[dict]:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -224,6 +233,15 @@ class ProductRepository:
         conn.commit()
         conn.close()
         return product_id
+
+    @staticmethod
+    def get_product_by_name_and_shop(shop_id: int, name: str) -> Optional[dict]:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM products WHERE shop_id = ? AND name = ?", (shop_id, name))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
 
     @staticmethod
     def delete_product(product_id: int) -> bool:
@@ -514,9 +532,6 @@ class FavoriteRepository:
 
 def seed_default_data(admin_id: int):
     """Наполнение базы данных начальными магазинами и товарами при первом запуске."""
-    if ShopRepository.get_shops_count() > 0:
-        return
-        
     from config.config import KEYLLECT_OWNER_ID, GAMEZONEBUILD_OWNER_ID
     
     # Создаем запись супер-админа
@@ -537,89 +552,103 @@ def seed_default_data(admin_id: int):
     else:
         UserRepository.update_user_role(gzb_owner, 'SHOP_OWNER')
         
-    # 1. Создаем магазин Keyllect
-    keyllect_id = ShopRepository.create_shop(
-        name="Keyllect",
-        description="Магазин игровых аксессуаров премиум-класса. Клавиатуры, мышки, наушники, коврики.",
-        logo=None,
-        telegram_username="keyllect_shop",
-        owner_id=keyllect_owner
-    )
-    
-    # 2. Создаем магазин GameZoneBuild
-    gzb_id = ShopRepository.create_shop(
-        name="GameZoneBuild",
-        description="Готовые игровые ПК, сборка компьютеров под заказ и качественные комплектующие.",
-        logo=None,
-        telegram_username="gamezone_build",
-        owner_id=gzb_owner
-    )
+    # 1. Создаем или получаем магазин Keyllect
+    keyllect = ShopRepository.get_shop_by_name("Keyllect")
+    if not keyllect:
+        keyllect_id = ShopRepository.create_shop(
+            name="Keyllect",
+            description="Магазин игровых аксессуаров премиум-класса. Клавиатуры, мышки, наушники, коврики.",
+            logo=None,
+            telegram_username="keyllect_shop",
+            owner_id=keyllect_owner
+        )
+    else:
+        keyllect_id = keyllect['id']
+        
+    # 2. Создаем или получаем магазин GameZoneBuild
+    gzb = ShopRepository.get_shop_by_name("GameZoneBuild")
+    if not gzb:
+        gzb_id = ShopRepository.create_shop(
+            name="GameZoneBuild",
+            description="Готовые игровые ПК, сборка компьютеров под заказ и качественные комплектующие.",
+            logo=None,
+            telegram_username="gamezone_build",
+            owner_id=gzb_owner
+        )
+    else:
+        gzb_id = gzb['id']
 
-    
+    # Вспомогательная функция для безопасного добавления товаров
+    def add_product_if_not_exists(shop_id, category, name, description, price, photo, stock_status=1):
+        if not ProductRepository.get_product_by_name_and_shop(shop_id, name):
+            ProductRepository.add_product(
+                shop_id=shop_id,
+                category=category,
+                name=name,
+                description=description,
+                price=price,
+                photo=photo,
+                stock_status=stock_status
+            )
+
     # --- Товары для Keyllect ---
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=keyllect_id,
         category="Клавиатуры",
         name="Механическая клавиатура Keyllect K80 RGB",
         description="Механическая клавиатура с переключателями Gateron Red, горячей заменой (Hot-swap) и настраиваемой RGB подсветкой.",
         price=950000.0,
-        photo="https://images.unsplash.com/photo-1595225476474-87563907a212?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1595225476474-87563907a212?w=600"
     )
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=keyllect_id,
         category="Мышки",
         name="Беспроводная мышь Keyllect Phantom Wireless",
         description="Ультралегкая игровая мышь (55 грамм), сенсор PixArt 3395, до 26000 DPI, частота опроса 4K Hz.",
         price=650000.0,
-        photo="https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=600"
     )
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=keyllect_id,
         category="Наушники",
         name="Гарнитура Keyllect SoundBlast Pro 7.1",
         description="Игровые наушники с виртуальным объемным звуком 7.1, съемным микрофоном с шумоподавлением и мягкими амбушюрами.",
         price=890000.0,
-        photo="https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=600"
     )
     
     # --- Товары для GameZoneBuild ---
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=gzb_id,
         category="Готовые ПК",
         name="Игровой ПК GameZone Apex Elite",
         description="Сбалансированная сборка: Intel Core i5-13400F, NVIDIA RTX 4060 Ti 8GB, 16GB DDR5, 1TB NVMe SSD. Идеально для Full HD и 2K гейминга.",
         price=14500000.0,
-        photo="https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=600"
     )
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=gzb_id,
         category="Игровые ПК",
         name="Монстр-ПК GameZone Apex Overlord",
         description="Топовое решение: Intel Core i9-14900KF, NVIDIA RTX 4090 24GB, 64GB DDR5, 2TB SSD, кастомное водяное охлаждение.",
         price=45000000.0,
-        photo="https://images.unsplash.com/photo-1624705002806-5d72df19c3ad?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1624705002806-5d72df19c3ad?w=600"
     )
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=gzb_id,
         category="Видеокарты",
         name="GeForce RTX 4070 Ti Super 16GB",
         description="Отличная видеокарта для игр в 4K разрешении с поддержкой трассировки лучей и DLSS 3.0.",
         price=12400000.0,
-        photo="https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=600"
     )
-    ProductRepository.add_product(
+    add_product_if_not_exists(
         shop_id=gzb_id,
         category="Процессоры",
         name="AMD Ryzen 7 7800X3D",
         description="Самый производительный игровой процессор на рынке с технологией 3D V-Cache.",
         price=5100000.0,
-        photo="https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?w=600",
-        stock_status=1
+        photo="https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?w=600"
     )
+
 
