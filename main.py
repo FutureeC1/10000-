@@ -6,7 +6,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config.config import BOT_TOKEN, ADMIN_ID
 from database.repositories import init_db, seed_default_data
 from bot.handlers.user_handlers import router as user_router
-from bot.handlers.admin_handlers import router as admin_router
 from bot.handlers.owner_handlers import router as owner_router
 
 async def main():
@@ -35,7 +34,6 @@ async def main():
 
     # Подключение роутеров обработчиков
     dp.include_router(user_router)
-    dp.include_router(admin_router)
     dp.include_router(owner_router)
 
     # Запуск polling
