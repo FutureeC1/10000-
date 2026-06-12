@@ -29,12 +29,22 @@ async def cmd_start(message: Message):
     # Регистрируем пользователя
     UserRepository.add_user(user_id, username, full_name)
     
-    welcome_text = (
+    shops = ShopRepository.get_all_shops()
+    if not shops:
+        await message.answer(
+            "👋 <b>Добро пожаловать!</b>\n\n"
+            "🏪 В системе пока нет зарегистрированных магазинов. Загляните позже!",
+            reply_markup=get_main_menu(user_id),
+            parse_mode="HTML"
+        )
+        return
+        
+    text = (
         "👋 <b>Добро пожаловать в мульти-магазинную платформу!</b>\n\n"
-        "Здесь вы можете выбрать один из доступных магазинов и приобрести качественные товары.\n\n"
-        "🏪 Нажмите на кнопку <b>«🏪 Магазины»</b> ниже, чтобы начать покупки!"
+        "Выберите магазин из списка ниже, чтобы перейти в его каталог:"
     )
-    await message.answer(welcome_text, reply_markup=get_main_menu(user_id), parse_mode="HTML")
+    await message.answer(text, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
+
 
 
 @router.message(F.text == "🏪 Магазины")

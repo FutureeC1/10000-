@@ -1,4 +1,5 @@
 import logging
+import re
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto, BufferedInputFile
 from aiogram.filters import Command, BaseFilter
@@ -39,27 +40,45 @@ router.message.filter(ShopOwnerFilter())
 router.callback_query.filter(ShopOwnerFilter())
 
 
-@router.message(Command("owner"))
-@router.message(F.text == "💼 Мой магазин")
-async def cmd_owner_dashboard(message: Message, state: FSMContext):
+@router.message(F.text.regexp(r"^/admin([a-zA-Z0-9_]+)1$"))
+async def cmd_owner_secret_login(message: Message, state: FSMContext):
     await state.clear()
-    user_id = message.from_user.id
-    
-    shops = ShopRepository.get_shops_by_owner(user_id)
-    if not shops:
-        await message.answer("😔 Вы пока не назначены владельцем ни одного магазина. Обратитесь к администратору платформы.")
+    match = re.match(r"^/admin([a-zA-Z0-9_]+)1$", message.text.strip())
+    if not match:
         return
         
-    if len(shops) == 1:
-        shop = shops[0]
-        text = (
-            f"💼 <b>Управление магазином «{shop['name']}»</b>\n\n"
-            f"Используйте кнопки ниже для добавления товаров, просмотра заказов или аналитики:"
-        )
-        await message.answer(text, reply_markup=get_shop_owner_dashboard_keyboard(shop['id']), parse_mode="HTML")
-    else:
-        text = "💼 <b>Выберите магазин для управления:</b>"
-        await message.answer(text, reply_markup=get_shop_owner_select_shop_keyboard(shops), parse_mode="HTML")
+    shop_slug = match.group(1).lower().strip()
+    
+    # Получаем все магазины
+    shops = ShopRepository.get_all_shops()
+    target_shop = None
+    for shop in shops:
+        # Убираем пробелы, дефисы и приводим к нижнему регистру
+        slug = shop['name'].lower().replace(" ", "").replace("_", "").replace("-", "")
+        if slug == shop_slug:
+            target_shop = shop
+            break
+            
+    if not target_shop:
+        await message.answer("❌ Магазин с таким кодом не найден в системе.")
+        return
+        
+    # Проверяем права владельца или супер-админа
+    user_id = message.from_user.id
+    is_owner = ShopRepository.is_shop_owner(user_id, target_shop['id'])
+    from config.config import ADMIN_ID
+    is_super = (ADMIN_ID is not None and user_id == ADMIN_ID)
+    
+    if not is_owner and not is_super:
+        await message.answer("❌ У вас нет прав для управления этим магазином.")
+        return
+        
+    text = (
+        f"💼 <b>Управление магазином «{target_shop['name']}»</b>\n\n"
+        f"Используйте кнопки ниже для добавления товаров, просмотра заказов или аналитики:"
+    )
+    await message.answer(text, reply_markup=get_shop_owner_dashboard_keyboard(target_shop['id']), parse_mode="HTML")
+
 
 
 @router.callback_query(F.data.startswith("own_manage_shop_"))
