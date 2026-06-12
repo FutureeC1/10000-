@@ -25,14 +25,24 @@ class ShopOwnerFilter(BaseFilter):
     """Фильтр для проверки прав SHOP_OWNER (владельца магазина)."""
     async def __call__(self, obj) -> bool:
         user_id = obj.from_user.id
-        # Проверяем роль в БД
+        
+        # 1. Проверяем по .env конфигам
+        from config.config import ADMIN_ID, KEYLLECT_OWNER_ID, GAMEZONEBUILD_OWNER_ID
+        if ADMIN_ID is not None and user_id == ADMIN_ID:
+            return True
+            
+        if user_id in [KEYLLECT_OWNER_ID, GAMEZONEBUILD_OWNER_ID]:
+            return True
+            
+        # 2. Проверяем роль в БД
         user = UserRepository.get_user(user_id)
         if user and user['role'] in ['SHOP_OWNER', 'SUPER_ADMIN']:
             return True
             
-        # Либо проверяем, есть ли у него привязанные магазины
+        # 3. Либо проверяем, есть ли у него привязанные магазины в БД
         owned_shops = ShopRepository.get_shops_by_owner(user_id)
         return len(owned_shops) > 0
+
 
 
 # Применяем фильтр ко всем хендлерам роутера
