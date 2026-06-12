@@ -33,8 +33,8 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     # Подключение роутеров обработчиков
-    dp.include_router(user_router)
     dp.include_router(owner_router)
+    dp.include_router(user_router)
 
     # Запуск polling
     logging.info("Starting bot...")

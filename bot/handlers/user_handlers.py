@@ -732,7 +732,7 @@ async def show_category_products(message: Message, shop_id: int, category: str, 
         )
 
 
-@router.message(F.text)
+@router.message(F.text & ~F.text.startswith("/"))
 async def process_shop_menu_click(message: Message, state: FSMContext):
     text = message.text.strip()
     
