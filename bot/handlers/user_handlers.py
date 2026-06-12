@@ -1,19 +1,19 @@
 import logging
-# pyrefly: ignore [missing-import]
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 
 from config.config import MANAGER_USERNAME
-from database.repositories import UserRepository, ProductRepository, OrderRepository, FavoriteRepository
+from database.repositories import UserRepository, ShopRepository, ProductRepository, OrderRepository, FavoriteRepository
 from bot.keyboards.reply import get_main_menu
 from bot.keyboards.inline import (
-    get_categories_keyboard,
+    get_shops_list_keyboard,
+    get_shop_categories_keyboard,
     get_product_detail_keyboard,
     get_favorites_keyboard,
     get_confirm_order_keyboard,
-    get_manager_keyboard
+    get_support_keyboard
 )
 from bot.states.user_states import OrderStates, SearchStates
 from services.order_service import create_new_order
@@ -26,58 +26,99 @@ async def cmd_start(message: Message):
     username = message.from_user.username
     full_name = message.from_user.full_name
     
-    # Регистрируем/обновляем пользователя в БД
+    # Регистрируем пользователя
     UserRepository.add_user(user_id, username, full_name)
     
     welcome_text = (
-        "👋 <b>Добро пожаловать в Keyllect!</b>\n\n"
-        "Мы — магазин премиальных игровых и компьютерных аксессуаров. "
-        "У нас вы найдете лучшие клавиатуры, мышки, наушники и коврики.\n\n"
-        "🛒 Воспользуйтесь меню ниже для навигации по магазину."
+        "👋 <b>Добро пожаловать в мульти-магазинную платформу!</b>\n\n"
+        "Здесь вы можете выбрать один из доступных магазинов и приобрести качественные товары.\n\n"
+        "🏪 Нажмите на кнопку <b>«🏪 Магазины»</b> ниже, чтобы начать покупки!"
     )
     await message.answer(welcome_text, reply_markup=get_main_menu(user_id), parse_mode="HTML")
 
 
-@router.message(F.text == "🛒 Каталог")
-@router.message(Command("catalog"))
-async def cmd_catalog(message: Message):
-    categories = ProductRepository.get_categories()
-    if not categories:
-        await message.answer("😔 В магазине пока нет товаров. Загляните позже!")
+@router.message(F.text == "🏪 Магазины")
+@router.message(Command("shops"))
+async def cmd_shops(message: Message):
+    shops = ShopRepository.get_all_shops()
+    if not shops:
+        await message.answer("😔 В системе пока нет зарегистрированных магазинов. Загляните позже!")
         return
         
-    await message.answer(
-        "📁 <b>Выберите категорию товаров:</b>",
-        reply_markup=get_categories_keyboard(categories),
-        parse_mode="HTML"
+    text = (
+        "🏪 <b>Список доступных магазинов:</b>\n\n"
+        "Выберите магазин из списка ниже, чтобы перейти в его каталог:"
     )
+    await message.answer(text, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
 
 
-@router.callback_query(F.data == "back_to_categories")
-async def callback_back_to_categories(callback: CallbackQuery):
-    categories = ProductRepository.get_categories()
-    if not categories:
-        await callback.message.edit_text("😔 В магазине пока нет товаров. Загляните позже!")
+@router.callback_query(F.data == "back_to_shops")
+async def callback_back_to_shops(callback: CallbackQuery):
+    shops = ShopRepository.get_all_shops()
+    if not shops:
+        await callback.message.edit_text("😔 В системе пока нет зарегистрированных магазинов. Загляните позже!")
         return
         
-    # Если сообщение с фото (карточка товара), то edit_text не сработает напрямую.
-    # Поэтому мы удалим карточку товара и отправим новое сообщение с категориями, чтобы не спамить.
+    text = (
+        "🏪 <b>Список доступных магазинов:</b>\n\n"
+        "Выберите магазин из списка ниже, чтобы перейти в его каталог:"
+    )
     try:
         await callback.message.delete()
     except Exception:
         pass
         
-    await callback.message.answer(
-        "📁 <b>Выберите категорию товаров:</b>",
-        reply_markup=get_categories_keyboard(categories),
-        parse_mode="HTML"
-    )
+    await callback.message.answer(text, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
     await callback.answer()
 
 
-def format_product_text(product: dict) -> str:
-    """Форматирует карточку товара."""
-    status_str = "✅ В наличии" if product['is_available'] else "❌ Нет в наличии"
+@router.callback_query(F.data.startswith("selectshop_"))
+@router.callback_query(F.data.startswith("back_to_categories_"))
+async def callback_select_shop(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    shop_id = int(parts[1]) if parts[0] == "selectshop" else int(parts[3])
+    
+    shop = ShopRepository.get_shop_by_id(shop_id)
+    if not shop:
+        await callback.answer("Магазин не найден.", show_alert=True)
+        return
+        
+    categories = ProductRepository.get_categories_by_shop(shop_id)
+    if not categories:
+        await callback.answer("В этом магазине пока нет товаров.", show_alert=True)
+        return
+        
+    text = (
+        f"🏪 <b>Магазин: {shop['name']}</b>\n"
+        f"📝 {shop['description'] or 'Описание отсутствует.'}\n\n"
+        f"📁 <b>Выберите категорию товаров:</b>"
+    )
+    
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+        
+    reply_markup = get_shop_categories_keyboard(shop_id, categories)
+    
+    if shop['logo']:
+        await callback.message.answer_photo(
+            photo=shop['logo'],
+            caption=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.answer(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    await callback.answer()
+
+
+def format_product_text(product: dict, shop_name: str) -> str:
+    status_str = "✅ В наличии" if product['stock_status'] == 1 else "❌ Нет в наличии"
     
     price_text = ""
     if product['is_discount']:
@@ -91,6 +132,7 @@ def format_product_text(product: dict) -> str:
         
     text = (
         f"🎮 <b>{product['name']}</b>\n"
+        f"🏪 Магазин: {shop_name}\n"
         f"Категория: {product['category']}\n"
         f"Наличие: {status_str}\n\n"
         f"📝 <b>Описание:</b>\n{product['description']}\n\n"
@@ -99,51 +141,51 @@ def format_product_text(product: dict) -> str:
     return text
 
 
-@router.callback_query(F.data.startswith("cat_"))
+@router.callback_query(F.data.startswith("shopcat_"))
 async def callback_select_category(callback: CallbackQuery):
-    category = callback.data.split("_")[1]
-    products = ProductRepository.get_products_by_category(category)
+    _, shop_id_str, category = callback.data.split("_")
+    shop_id = int(shop_id_str)
     
+    shop = ShopRepository.get_shop_by_id(shop_id)
+    if not shop:
+        await callback.answer("Магазин не найден.", show_alert=True)
+        return
+        
+    products = ProductRepository.get_products_by_category(shop_id, category)
     if not products:
         await callback.answer("В этой категории нет товаров.", show_alert=True)
         return
         
     product = products[0]
     is_fav = FavoriteRepository.is_favorite(callback.from_user.id, product['id'])
-    text = format_product_text(product)
+    text = format_product_text(product, shop['name'])
     
-    # Удаляем меню категорий
     try:
         await callback.message.delete()
     except Exception:
         pass
         
-    # Отправляем карточку первого товара с фото
+    reply_markup = get_product_detail_keyboard(
+        product_id=product['id'],
+        shop_id=shop_id,
+        category=category,
+        current_index=0,
+        total_count=len(products),
+        is_fav=is_fav,
+        is_available=(product['stock_status'] == 1)
+    )
+    
     if product['photo']:
         await callback.message.answer_photo(
             photo=product['photo'],
             caption=text,
-            reply_markup=get_product_detail_keyboard(
-                product_id=product['id'],
-                category=category,
-                current_index=0,
-                total_count=len(products),
-                is_fav=is_fav,
-                is_available=bool(product['is_available'])
-            ),
+            reply_markup=reply_markup,
             parse_mode="HTML"
         )
     else:
         await callback.message.answer(
             text,
-            reply_markup=get_product_detail_keyboard(
-                product_id=product['id'],
-                category=category,
-                current_index=0,
-                total_count=len(products),
-                is_fav=is_fav,
-                is_available=bool(product['is_available'])
-            ),
+            reply_markup=reply_markup,
             parse_mode="HTML"
         )
     await callback.answer()
@@ -151,34 +193,36 @@ async def callback_select_category(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("nav_"))
 async def callback_nav_products(callback: CallbackQuery):
-    _, category, index_str = callback.data.split("_")
+    _, shop_id_str, category, index_str = callback.data.split("_")
+    shop_id = int(shop_id_str)
     index = int(index_str)
     
-    products = ProductRepository.get_products_by_category(category)
-    if not products or index >= len(products):
+    shop = ShopRepository.get_shop_by_id(shop_id)
+    products = ProductRepository.get_products_by_category(shop_id, category)
+    
+    if not products or index >= len(products) or not shop:
         await callback.answer("Ошибка навигации.", show_alert=True)
         return
         
     product = products[index]
     is_fav = FavoriteRepository.is_favorite(callback.from_user.id, product['id'])
-    text = format_product_text(product)
+    text = format_product_text(product, shop['name'])
     
     reply_markup = get_product_detail_keyboard(
         product_id=product['id'],
+        shop_id=shop_id,
         category=category,
         current_index=index,
         total_count=len(products),
         is_fav=is_fav,
-        is_available=bool(product['is_available'])
+        is_available=(product['stock_status'] == 1)
     )
     
-    # Редактируем существующее сообщение для чистого UX
     if product['photo']:
         media = InputMediaPhoto(media=product['photo'], caption=text, parse_mode="HTML")
         try:
             await callback.message.edit_media(media=media, reply_markup=reply_markup)
         except Exception:
-            # Если не получается отредактировать медиа, удаляем старое и шлем новое
             try:
                 await callback.message.delete()
             except Exception:
@@ -221,13 +265,15 @@ async def callback_toggle_favorite(callback: CallbackQuery):
         is_fav = True
         
     # Обновляем клавиатуру
+    products = ProductRepository.get_products_by_category(product['shop_id'], product['category'])
     reply_markup = get_product_detail_keyboard(
         product_id=product_id,
+        shop_id=product['shop_id'],
         category=product['category'],
         current_index=index,
-        total_count=len(ProductRepository.get_products_by_category(product['category'])),
+        total_count=len(products),
         is_fav=is_fav,
-        is_available=bool(product['is_available'])
+        is_available=(product['stock_status'] == 1)
     )
     try:
         await callback.message.edit_reply_markup(reply_markup=reply_markup)
@@ -235,17 +281,75 @@ async def callback_toggle_favorite(callback: CallbackQuery):
         pass
 
 
-@router.message(F.text == "⭐ Избранное")
+# ==========================================
+# ПОИСК В МАГАЗИНЕ
+# ==========================================
+
+@router.callback_query(F.data.startswith("shopsearch_"))
+async def callback_search_shop_start(callback: CallbackQuery, state: FSMContext):
+    shop_id = int(callback.data.split("_")[1])
+    await state.clear()
+    await state.update_data(search_shop_id=shop_id)
+    
+    await callback.message.answer("🔍 <b>Введите название товара для поиска в этом магазине:</b>", parse_mode="HTML")
+    await state.set_state(SearchStates.waiting_for_query)
+    await callback.answer()
+
+
+@router.message(SearchStates.waiting_for_query)
+async def process_search_query(message: Message, state: FSMContext):
+    state_data = await state.get_data()
+    shop_id = state_data['search_shop_id']
+    query = message.text.strip()
+    
+    await state.clear()
+    
+    shop = ShopRepository.get_shop_by_id(shop_id)
+    if not shop:
+        await message.answer("Магазин не найден.")
+        return
+        
+    products = ProductRepository.search_products(shop_id, query)
+    if not products:
+        await message.answer("😔 По вашему запросу ничего не найдено в этом магазине.")
+        return
+        
+    product = products[0]
+    is_fav = FavoriteRepository.is_favorite(message.from_user.id, product['id'])
+    text = format_product_text(product, shop['name'])
+    
+    reply_markup = get_product_detail_keyboard(
+        product_id=product['id'],
+        shop_id=shop_id,
+        category=product['category'],
+        current_index=0,
+        total_count=len(products),
+        is_fav=is_fav,
+        is_available=(product['stock_status'] == 1)
+    )
+    
+    await message.answer(f"🔍 <b>Результаты поиска по запросу «{query}»:</b>", parse_mode="HTML")
+    if product['photo']:
+        await message.answer_photo(photo=product['photo'], caption=text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+
+
+# ==========================================
+# ИЗБРАННОЕ (ДОСТУПНО ПО КОМАНДЕ /favorites)
+# ==========================================
+
+@router.message(Command("favorites"))
 async def cmd_favorites(message: Message):
     user_id = message.from_user.id
     favorites = FavoriteRepository.get_user_favorites(user_id)
     
     if not favorites:
-        await message.answer("⭐ <b>Ваш список избранного пуст.</b>\nДобавляйте товары в избранное прямо из каталога!", parse_mode="HTML")
+        await message.answer("⭐ <b>Ваш список избранного пуст.</b>\nДобавляйте товары в избранное прямо из каталога магазинов!", parse_mode="HTML")
         return
         
     product = favorites[0]
-    text = format_product_text(product)
+    text = format_product_text(product, product['shop_name'])
     
     reply_markup = get_favorites_keyboard(
         product_id=product['id'],
@@ -266,12 +370,12 @@ async def callback_fav_nav(callback: CallbackQuery):
     favorites = FavoriteRepository.get_user_favorites(user_id)
     
     if not favorites:
-        await callback.message.edit_text("⭐ Ваша корзина избранного пуста.")
+        await callback.message.edit_text("⭐ Ваше избранное пусто.")
         await callback.answer()
         return
         
     product = favorites[index % len(favorites)]
-    text = format_product_text(product)
+    text = format_product_text(product, product['shop_name'])
     
     reply_markup = get_favorites_keyboard(
         product_id=product['id'],
@@ -323,7 +427,7 @@ async def callback_fav_remove(callback: CallbackQuery):
         
     new_index = index if index < len(favorites) else 0
     product = favorites[new_index]
-    text = format_product_text(product)
+    text = format_product_text(product, product['shop_name'])
     
     reply_markup = get_favorites_keyboard(
         product_id=product['id'],
@@ -352,81 +456,18 @@ async def callback_fav_remove(callback: CallbackQuery):
             await callback.message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
 
-@router.message(F.text == "🔍 Поиск")
-async def cmd_search(message: Message, state: FSMContext):
-    await state.clear()
-    await message.answer("🔍 <b>Введите название товара или ключевое слово для поиска:</b>", parse_mode="HTML")
-    await state.set_state(SearchStates.waiting_for_query)
+# ==========================================
+# ПОДДЕРЖКА И ЗАКАЗЫ КЛИЕНТА
+# ==========================================
 
-
-@router.message(SearchStates.waiting_for_query)
-async def process_search_query(message: Message, state: FSMContext):
-    query = message.text.strip()
-    if not query:
-        await message.answer("Пожалуйста, введите корректный запрос.")
-        return
-        
-    products = ProductRepository.search_products(query)
-    await state.clear()
-    
-    if not products:
-        await message.answer("😔 Товары по вашему запросу не найдены. Попробуйте другое слово.")
-        return
-        
-    product = products[0]
-    is_fav = FavoriteRepository.is_favorite(message.from_user.id, product['id'])
-    text = format_product_text(product)
-    
-    reply_markup = get_product_detail_keyboard(
-        product_id=product['id'],
-        category=product['category'],
-        current_index=0,
-        total_count=len(products),
-        is_fav=is_fav,
-        is_available=bool(product['is_available'])
-    )
-    
-    await message.answer(f"🔍 <b>Результаты поиска по запросу «{query}»:</b>", parse_mode="HTML")
-    if product['photo']:
-        await message.answer_photo(photo=product['photo'], caption=text, reply_markup=reply_markup, parse_mode="HTML")
-    else:
-        await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
-
-
-@router.message(F.text == "ℹ️ О магазине")
-async def cmd_about(message: Message):
+@router.message(F.text == "📞 Поддержка")
+async def cmd_support(message: Message):
     text = (
-        "ℹ️ <b>О магазине Keyllect</b>\n\n"
-        "Добро пожаловать в <b>Keyllect</b> — ваш надежный партнер в мире гейминга и высоких технологий! 🎮\n\n"
-        "Мы специализируемся на продаже игровых девайсов экстра-класса:\n"
-        "• ⌨️ Механические и мембранные клавиатуры с кастомной подсветкой\n"
-        "• 🖱 Ультралегкие эргономичные мыши для киберспорта\n"
-        "• 🎧 Наушники с кристально чистым объемным звуком 7.1\n"
-        "• 🗺 Профессиональные коврики любых размеров с отличным покрытием Control/Speed\n\n"
-        "🌟 <b>Наши преимущества:</b>\n"
-        "• Только оригинальная продукция ведущих мировых брендов\n"
-        "• Быстрая доставка прямо до двери\n"
-        "• Гарантия качества на весь ассортимент\n\n"
-        "Соберите свой идеальный сетап вместе с Keyllect! 🚀"
+        "📞 <b>Служба поддержки пользователей</b>\n\n"
+        "Если у вас возникли вопросы по работе платформы, оформлению заказов или вам нужна консультация, "
+        "нажмите на кнопку ниже, чтобы написать нашему дежурному менеджеру."
     )
-    await message.answer(text, parse_mode="HTML")
-
-
-@router.message(F.text == "📞 Контакты")
-async def cmd_contacts(message: Message):
-    text = (
-        "📞 <b>Контакты магазина Keyllect</b>\n\n"
-        "📍 <b>Адрес шоурума:</b> г. Ташкент, ул. Амира Темура, 42 (ориентир: станция метро Алайский рынок)\n"
-        "⏰ <b>Режим работы:</b> Ежедневно с 10:00 до 21:00\n"
-        "📞 <b>Телефон поддержки:</b> +998 (90) 123-45-67\n"
-        "📧 <b>E-mail:</b> support@keyllect.uz\n\n"
-        "💬 Возникли вопросы по заказу или ассортименту? Наш менеджер всегда на связи и готов помочь!"
-    )
-    await message.answer(
-        text, 
-        reply_markup=get_manager_keyboard(MANAGER_USERNAME), 
-        parse_mode="HTML"
-    )
+    await message.answer(text, reply_markup=get_support_keyboard(MANAGER_USERNAME), parse_mode="HTML")
 
 
 @router.message(F.text == "📦 Мои заказы")
@@ -435,7 +476,7 @@ async def cmd_my_orders(message: Message):
     orders = OrderRepository.get_user_orders(user_id)
     
     if not orders:
-        await message.answer("📦 <b>У вас пока нет заказов.</b>\nСамое время сделать первый заказ в каталоге! 😉", parse_mode="HTML")
+        await message.answer("📦 <b>У вас пока нет заказов.</b>\nСамое время выбрать магазин и сделать первую покупку! 😉", parse_mode="HTML")
         return
         
     text = "<b>📦 Ваша история заказов:</b>\n\n"
@@ -449,10 +490,10 @@ async def cmd_my_orders(message: Message):
         'Отменен': '❌'
     }
     
-    for order in orders[:10]: # Показываем последние 10 заказов
+    for order in orders[:15]:
         emoji = status_emojis.get(order['status'], '🔔')
         text += (
-            f"🔹 <b>Заказ #{order['id']}</b>\n"
+            f"🔹 <b>Заказ #{order['id']} в «{order['shop_name']}»</b>\n"
             f"🛒 Товар: {order['product_name']}\n"
             f"💰 Цена: {order['product_price']:,} сум\n"
             f"⏱ Статус: {emoji} {order['status']}\n"
@@ -468,22 +509,33 @@ async def cmd_my_orders(message: Message):
 
 @router.callback_query(F.data.startswith("order_"))
 async def start_order_fsm(callback: CallbackQuery, state: FSMContext):
-    data_parts = callback.data.split("_")
-    product_id = int(data_parts[1]) if len(data_parts) == 2 else int(data_parts[2])
+    parts = callback.data.split("_")
     
-    product = ProductRepository.get_product_by_id(product_id)
+    if parts[1] == "fav":
+        # Заказ из избранного
+        product_id = int(parts[2])
+        product = ProductRepository.get_product_by_id(product_id)
+        if not product:
+            await callback.answer("Товар не найден.", show_alert=True)
+            return
+        shop_id = product['shop_id']
+    else:
+        # Обычный заказ
+        shop_id = int(parts[1])
+        product_id = int(parts[2])
+        product = ProductRepository.get_product_by_id(product_id)
+        
     if not product:
         await callback.answer("Товар не найден.", show_alert=True)
         return
         
-    if not product['is_available']:
+    if product['stock_status'] == 0:
         await callback.answer("Извините, этого товара нет в наличии.", show_alert=True)
         return
         
     await state.clear()
-    await state.update_data(product_id=product_id)
+    await state.update_data(shop_id=shop_id, product_id=product_id)
     
-    # Удаляем карточку, чтобы перейти к вводу FSM (или пишем сообщение о начале заказа)
     try:
         await callback.message.delete()
     except Exception:
@@ -502,7 +554,7 @@ async def start_order_fsm(callback: CallbackQuery, state: FSMContext):
 async def process_order_name(message: Message, state: FSMContext):
     name = message.text.strip()
     if len(name) < 2:
-        await message.answer("Пожалуйста, введите корректное имя (минимум 2 символа):")
+        await message.answer("Пожалуйста, введите имя (минимум 2 символа):")
         return
         
     await state.update_data(name=name)
@@ -517,7 +569,6 @@ async def process_order_name(message: Message, state: FSMContext):
 @router.message(OrderStates.waiting_for_phone)
 async def process_order_phone(message: Message, state: FSMContext):
     phone = message.text.strip()
-    # Простая валидация
     if len(phone) < 7:
         await message.answer("Пожалуйста, введите корректный номер телефона:")
         return
@@ -539,12 +590,12 @@ async def process_order_address(message: Message, state: FSMContext):
         
     await state.update_data(address=address)
     
-    # Показываем превью заказа
     data = await state.get_data()
     product = ProductRepository.get_product_by_id(data['product_id'])
+    shop = ShopRepository.get_shop_by_id(data['shop_id'])
     
-    if not product:
-        await message.answer("Произошла ошибка, товар не найден. Пожалуйста, начните заново.")
+    if not product or not shop:
+        await message.answer("Произошла ошибка, товар не найден. Начните заново с выбора магазина.")
         await state.clear()
         return
         
@@ -554,6 +605,7 @@ async def process_order_address(message: Message, state: FSMContext):
         
     preview_text = (
         "🧐 <b>Проверьте правильность введенных данных:</b>\n\n"
+        f"🏪 <b>Магазин:</b> {shop['name']}\n"
         f"📦 <b>Товар:</b> {product['name']}\n"
         f"💰 <b>Стоимость:</b> {price_str}\n\n"
         f"👤 <b>Получатель:</b> {data['name']}\n"
@@ -581,6 +633,7 @@ async def process_order_confirm(callback: CallbackQuery, state: FSMContext):
     
     order_id = await create_new_order(
         bot=callback.bot,
+        shop_id=data['shop_id'],
         user_id=callback.from_user.id,
         full_name=data['name'],
         phone=data['phone'],
@@ -591,8 +644,8 @@ async def process_order_confirm(callback: CallbackQuery, state: FSMContext):
     if order_id:
         success_text = (
             f"🎉 <b>Заказ #{order_id} успешно оформлен!</b>\n\n"
-            "Наш менеджер свяжется с вами в ближайшее время для подтверждения доставки.\n"
-            "Вы будете получать автоматические уведомления об изменении статуса вашего заказа в этом чате. 🔔"
+            "Владелец магазина уведомлен о новом заказе и скоро свяжется с вами.\n"
+            "Вы будете получать уведомления об изменении статуса вашего заказа здесь. 🔔"
         )
         await callback.message.edit_text(success_text, parse_mode="HTML")
     else:

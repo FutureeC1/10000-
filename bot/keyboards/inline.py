@@ -1,69 +1,72 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List
 
-def get_manager_keyboard(username: str) -> InlineKeyboardMarkup:
-    """Кнопка для связи с менеджером."""
-    # Убираем @ если есть
-    if username.startswith('@'):
-        username = username[1:]
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📞 Написать менеджеру", url=f"https://t.me/{username}")
-        ]
-    ])
+# ==========================================
+# КЛИЕНТСКИЕ КЛАВИАТУРЫ
+# ==========================================
 
-def get_categories_keyboard(categories: List[str]) -> InlineKeyboardMarkup:
-    """Клавиатура со списком категорий."""
+def get_shops_list_keyboard(shops: List[dict]) -> InlineKeyboardMarkup:
+    """Список магазинов для клиента."""
     keyboard = []
-    # Отображаем категории по 2 в ряд
+    for shop in shops:
+        keyboard.append([InlineKeyboardButton(text=f"🏪 {shop['name']}", callback_data=f"selectshop_{shop['id']}")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_shop_categories_keyboard(shop_id: int, categories: List[str]) -> InlineKeyboardMarkup:
+    """Список категорий товаров в выбранном магазине."""
+    keyboard = []
     for i in range(0, len(categories), 2):
         row = []
         for cat in categories[i:i+2]:
-            row.append(InlineKeyboardButton(text=cat, callback_data=f"cat_{cat}"))
+            row.append(InlineKeyboardButton(text=cat, callback_data=f"shopcat_{shop_id}_{cat}"))
         keyboard.append(row)
         
+    keyboard.append([InlineKeyboardButton(text="🔍 Поиск по магазину", callback_data=f"shopsearch_{shop_id}")])
+    keyboard.append([InlineKeyboardButton(text="📁 К списку магазинов", callback_data="back_to_shops")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_product_detail_keyboard(product_id: int, category: str, current_index: int, 
+
+def get_product_detail_keyboard(product_id: int, shop_id: int, category: str, current_index: int, 
                                  total_count: int, is_fav: bool, is_available: bool) -> InlineKeyboardMarkup:
-    """Клавиатура для карточки товара с пагинацией."""
+    """Карточка товара с пагинацией для клиента."""
     keyboard = []
     
     # Кнопки действия (Заказать, Избранное)
     action_row = []
     if is_available:
-        action_row.append(InlineKeyboardButton(text="🛒 Заказать", callback_data=f"order_{product_id}"))
+        action_row.append(InlineKeyboardButton(text="🛒 Заказать", callback_data=f"order_{shop_id}_{product_id}"))
     
     fav_text = "❌ Убрать из Избранного" if is_fav else "⭐ В Избранное"
     action_row.append(InlineKeyboardButton(text=fav_text, callback_data=f"fav_{product_id}_{current_index}"))
     keyboard.append(action_row)
     
-    # Кнопки пагинации
+    # Пагинация
     pagination_row = []
     if total_count > 1:
         prev_idx = (current_index - 1) % total_count
         next_idx = (current_index + 1) % total_count
-        pagination_row.append(InlineKeyboardButton(text="◀️", callback_data=f"nav_{category}_{prev_idx}"))
+        pagination_row.append(InlineKeyboardButton(text="◀️", callback_data=f"nav_{shop_id}_{category}_{prev_idx}"))
         pagination_row.append(InlineKeyboardButton(text=f"{current_index + 1}/{total_count}", callback_data="ignore"))
-        pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"nav_{category}_{next_idx}"))
+        pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"nav_{shop_id}_{category}_{next_idx}"))
         keyboard.append(pagination_row)
         
-    # Кнопка возврата к списку категорий
-    keyboard.append([InlineKeyboardButton(text="📁 К категориям", callback_data="back_to_categories")])
-    
+    keyboard.append([InlineKeyboardButton(text="📁 К категориям", callback_data=f"back_to_categories_{shop_id}")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+
 def get_favorites_keyboard(product_id: int, current_index: int, total_count: int) -> InlineKeyboardMarkup:
-    """Клавиатура для товаров из Избранного."""
+    """Клавиатура для просмотра Избранного."""
     keyboard = []
     
-    # Кнопки действия
+    # Кнопка Заказать и Удалить
     keyboard.append([
+        # В БД товар привязан к shop_id, мы можем извлечь его при заказе, поэтому callback_data содержит только ID товара
         InlineKeyboardButton(text="🛒 Заказать", callback_data=f"order_fav_{product_id}"),
         InlineKeyboardButton(text="❌ Удалить", callback_data=f"unfav_{product_id}_{current_index}")
     ])
     
-    # Пагинация по избранному
+    # Пагинация
     pagination_row = []
     if total_count > 1:
         prev_idx = (current_index - 1) % total_count
@@ -75,6 +78,7 @@ def get_favorites_keyboard(product_id: int, current_index: int, total_count: int
         
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+
 def get_confirm_order_keyboard() -> InlineKeyboardMarkup:
     """Подтверждение заказа."""
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -84,34 +88,83 @@ def get_confirm_order_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def get_admin_main_keyboard() -> InlineKeyboardMarkup:
-    """Главная админ-клавиатура."""
+
+def get_support_keyboard(manager_username: str) -> InlineKeyboardMarkup:
+    """Клавиатура поддержки."""
+    if manager_username.startswith('@'):
+        manager_username = manager_username[1:]
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📞 Связаться с поддержкой", url=f"https://t.me/{manager_username}")]
+    ])
+
+
+# ==========================================
+# КЛАВИАТУРЫ СУПЕР-АДМИНИСТРАТОРА (SUPER_ADMIN)
+# ==========================================
+
+def get_superadmin_main_keyboard() -> InlineKeyboardMarkup:
+    """Панель Супер-админа."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="➕ Добавить товар", callback_data="adm_add_product"),
-            InlineKeyboardButton(text="🗑 Управление товарами", callback_data="adm_manage_products")
+            InlineKeyboardButton(text="➕ Создать магазин", callback_data="sa_add_shop"),
+            InlineKeyboardButton(text="🗑 Удалить магазин", callback_data="sa_list_shops_del")
         ],
         [
-            InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats"),
-            InlineKeyboardButton(text="📦 Просмотр заказов", callback_data="adm_list_orders")
-        ],
-        [
-            InlineKeyboardButton(text="📢 Сделать рассылку", callback_data="adm_broadcast")
+            InlineKeyboardButton(text="📊 Статистика системы", callback_data="sa_stats")
         ]
     ])
 
-def get_admin_products_nav_keyboard(product_id: int, current_index: int, total_count: int) -> InlineKeyboardMarkup:
-    """Навигация по товарам для админа."""
+
+def get_superadmin_delete_shops_keyboard(shops: List[dict]) -> InlineKeyboardMarkup:
+    """Список магазинов для удаления."""
+    keyboard = []
+    for shop in shops:
+        keyboard.append([
+            InlineKeyboardButton(text=f"❌ Удалить {shop['name']}", callback_data=f"sa_del_confirm_{shop['id']}")
+        ])
+    keyboard.append([InlineKeyboardButton(text="📁 В супер-админку", callback_data="sa_back")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+# ==========================================
+# КЛАВИАТУРЫ ВЛАДЕЛЬЦА МАГАЗИНА (SHOP_OWNER)
+# ==========================================
+
+def get_shop_owner_select_shop_keyboard(shops: List[dict]) -> InlineKeyboardMarkup:
+    """Выбор магазина для управления владельцем (если их несколько)."""
+    keyboard = []
+    for shop in shops:
+        keyboard.append([InlineKeyboardButton(text=f"🛠 {shop['name']}", callback_data=f"own_manage_shop_{shop['id']}")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_shop_owner_dashboard_keyboard(shop_id: int) -> InlineKeyboardMarkup:
+    """Панель управления конкретным магазином."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="➕ Добавить товар", callback_data=f"own_add_product_{shop_id}"),
+            InlineKeyboardButton(text="📦 Управление товарами", callback_data=f"own_list_products_{shop_id}")
+        ],
+        [
+            InlineKeyboardButton(text="📊 Статистика", callback_data=f"own_stats_{shop_id}"),
+            InlineKeyboardButton(text="📥 Список заказов", callback_data=f"own_list_orders_{shop_id}")
+        ]
+    ])
+
+
+def get_owner_products_nav_keyboard(product_id: int, shop_id: int, current_index: int, 
+                                     total_count: int) -> InlineKeyboardMarkup:
+    """Управление товарами для владельца магазина с пагинацией."""
     keyboard = []
     
-    # Действия над товаром
+    # Действия
     keyboard.append([
-        InlineKeyboardButton(text="✏️ Цена", callback_data=f"adm_prod_price_{product_id}_{current_index}"),
-        InlineKeyboardButton(text="🔔 Наличие", callback_data=f"adm_prod_avail_{product_id}_{current_index}"),
-        InlineKeyboardButton(text="🔥 Скидка", callback_data=f"adm_prod_discount_{product_id}_{current_index}")
+        InlineKeyboardButton(text="✏️ Цена", callback_data=f"own_prod_price_{product_id}_{current_index}"),
+        InlineKeyboardButton(text="🔔 Наличие", callback_data=f"own_prod_avail_{product_id}_{current_index}"),
+        InlineKeyboardButton(text="🔥 Скидка", callback_data=f"own_prod_discount_{product_id}_{current_index}")
     ])
     keyboard.append([
-        InlineKeyboardButton(text="❌ Удалить товар", callback_data=f"adm_prod_del_{product_id}_{current_index}")
+        InlineKeyboardButton(text="❌ Удалить товар", callback_data=f"own_prod_del_{product_id}_{current_index}")
     ])
     
     # Пагинация
@@ -119,39 +172,25 @@ def get_admin_products_nav_keyboard(product_id: int, current_index: int, total_c
     if total_count > 1:
         prev_idx = (current_index - 1) % total_count
         next_idx = (current_index + 1) % total_count
-        pagination_row.append(InlineKeyboardButton(text="◀️", callback_data=f"adm_prod_nav_{prev_idx}"))
+        pagination_row.append(InlineKeyboardButton(text="◀️", callback_data=f"own_prod_nav_{shop_id}_{prev_idx}"))
         pagination_row.append(InlineKeyboardButton(text=f"{current_index + 1}/{total_count}", callback_data="ignore"))
-        pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"adm_prod_nav_{next_idx}"))
+        pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"own_prod_nav_{shop_id}_{next_idx}"))
         keyboard.append(pagination_row)
         
-    keyboard.append([InlineKeyboardButton(text="📁 В админку", callback_data="adm_back")])
+    keyboard.append([InlineKeyboardButton(text="📁 В меню магазина", callback_data=f"own_manage_shop_{shop_id}")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_admin_order_status_keyboard(order_id: int) -> InlineKeyboardMarkup:
-    """Клавиатура выбора статуса заказа."""
-    statuses = ['Новый', 'Подтвержден', 'В обработке', 'Доставляется', 'Завершен', 'Отменен']
-    keyboard = []
-    
-    # По 2 кнопки в ряд
-    for i in range(0, len(statuses), 2):
-        row = []
-        for status in statuses[i:i+2]:
-            row.append(InlineKeyboardButton(text=status, callback_data=f"adm_change_status_{order_id}_{status}"))
-        keyboard.append(row)
-        
-    keyboard.append([InlineKeyboardButton(text="📁 К заказам", callback_data="adm_list_orders")])
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_admin_orders_list_keyboard(orders: List[dict], current_page: int, total_pages: int) -> InlineKeyboardMarkup:
-    """Список заказов с пагинацией."""
+def get_owner_orders_list_keyboard(orders: List[dict], shop_id: int, current_page: int, 
+                                    total_pages: int) -> InlineKeyboardMarkup:
+    """Список заказов магазина для владельца."""
     keyboard = []
     
-    # Список заказов (кнопка на каждый заказ)
     for order in orders:
         keyboard.append([
             InlineKeyboardButton(
-                text=f"Заказ #{order['id']} - {order['status']} ({order['product_price']} сум)",
-                callback_data=f"adm_order_detail_{order['id']}"
+                text=f"Заказ #{order['id']} - {order['status']} ({order['product_price']:,} сум)",
+                callback_data=f"own_order_detail_{order['id']}"
             )
         ])
         
@@ -160,10 +199,28 @@ def get_admin_orders_list_keyboard(orders: List[dict], current_page: int, total_
     if total_pages > 1:
         prev_page = (current_page - 1) % total_pages
         next_page = (current_page + 1) % total_pages
-        nav_row.append(InlineKeyboardButton(text="◀️", callback_data=f"adm_orders_page_{prev_page}"))
+        nav_row.append(InlineKeyboardButton(text="◀️", callback_data=f"own_orders_page_{shop_id}_{prev_page}"))
         nav_row.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="ignore"))
-        nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"adm_orders_page_{next_page}"))
+        nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"own_orders_page_{shop_id}_{next_page}"))
         keyboard.append(nav_row)
         
-    keyboard.append([InlineKeyboardButton(text="📁 В админку", callback_data="adm_back")])
+    keyboard.append([
+        InlineKeyboardButton(text="📊 Экспорт CSV", callback_data=f"own_export_csv_{shop_id}"),
+        InlineKeyboardButton(text="📁 В меню", callback_data=f"own_manage_shop_{shop_id}")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_owner_order_status_keyboard(order_id: int, shop_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура смены статуса заказа для владельца."""
+    statuses = ['Новый', 'Подтвержден', 'В обработке', 'Доставляется', 'Завершен', 'Отменен']
+    keyboard = []
+    
+    for i in range(0, len(statuses), 2):
+        row = []
+        for status in statuses[i:i+2]:
+            row.append(InlineKeyboardButton(text=status, callback_data=f"own_change_status_{order_id}_{status}"))
+        keyboard.append(row)
+        
+    keyboard.append([InlineKeyboardButton(text="📁 Назад к заказам", callback_data=f"own_list_orders_{shop_id}")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
