@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 
 from config.config import MANAGER_USERNAME
 from database.repositories import UserRepository, ShopRepository, ProductRepository, OrderRepository, FavoriteRepository
-from bot.keyboards.reply import get_main_menu
+from bot.keyboards.reply import get_main_menu, get_shop_menu_keyboard
 from bot.keyboards.inline import (
     get_shops_list_keyboard,
     get_shop_categories_keyboard,
@@ -79,8 +79,11 @@ async def callback_back_to_shops(callback: CallbackQuery, state: FSMContext):
     except Exception:
         pass
         
+    # Восстанавливаем главное меню
+    await callback.message.answer("Вы вышли из магазина.", reply_markup=get_main_menu(callback.from_user.id))
     await callback.message.answer(text, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
     await callback.answer()
+
 
 
 @router.callback_query(F.data.startswith("selectshop_"))
@@ -105,7 +108,7 @@ async def callback_select_shop(callback: CallbackQuery, state: FSMContext):
     text = (
         f"🏪 <b>Магазин: {shop['name']}</b>\n"
         f"📝 {shop['description'] or 'Описание отсутствует.'}\n\n"
-        f"📁 <b>Выберите категорию товаров:</b>"
+        f"📁 <b>Выберите категорию товаров на клавиатуре внизу!</b>"
     )
     
     try:
@@ -113,7 +116,7 @@ async def callback_select_shop(callback: CallbackQuery, state: FSMContext):
     except Exception:
         pass
         
-    reply_markup = get_shop_categories_keyboard(shop_id, categories)
+    reply_markup = get_shop_menu_keyboard(categories)
     
     if shop['logo']:
         await callback.message.answer_photo(
@@ -129,6 +132,7 @@ async def callback_select_shop(callback: CallbackQuery, state: FSMContext):
             parse_mode="HTML"
         )
     await callback.answer()
+
 
 
 
@@ -682,3 +686,87 @@ async def process_order_confirm(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_text("😔 К сожалению, произошла ошибка при оформлении заказа. Попробуйте еще раз.")
         
     await callback.answer()
+
+
+# ==========================================
+# ОБРАБОТЧИКИ НАЖАТИЙ REPLY-МЕНЮ МАГАЗИНА
+# ==========================================
+
+async def show_category_products(message: Message, shop_id: int, category: str, state: FSMContext):
+    shop = ShopRepository.get_shop_by_id(shop_id)
+    if not shop:
+        await message.answer("Магазин не найден.")
+        return
+        
+    products = ProductRepository.get_products_by_category(shop_id, category)
+    if not products:
+        await message.answer("В этой категории нет товаров.")
+        return
+        
+    product = products[0]
+    is_fav = FavoriteRepository.is_favorite(message.from_user.id, product['id'])
+    text = format_product_text(product, shop['name'])
+    
+    reply_markup = get_product_detail_keyboard(
+        product_id=product['id'],
+        shop_id=shop_id,
+        category=category,
+        current_index=0,
+        total_count=len(products),
+        is_fav=is_fav,
+        is_available=(product['stock_status'] == 1)
+    )
+    
+    if product['photo']:
+        await message.answer_photo(
+            photo=product['photo'],
+            caption=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+
+
+@router.message(F.text)
+async def process_shop_menu_click(message: Message, state: FSMContext):
+    text = message.text.strip()
+    
+    state_data = await state.get_data()
+    shop_id = state_data.get('current_shop_id')
+    
+    if shop_id:
+        categories = ProductRepository.get_categories_by_shop(shop_id)
+        
+        # 1. Если кликнули по категории
+        if text in categories:
+            await show_category_products(message, shop_id, text, state)
+            return
+            
+        # 2. Если кликнули по поиску
+        if text == "🔍 Поиск по магазину":
+            await state.update_data(search_shop_id=shop_id)
+            await message.answer("🔍 <b>Введите название товара для поиска в этом магазине:</b>", parse_mode="HTML")
+            await state.set_state(SearchStates.waiting_for_query)
+            return
+            
+        # 3. Если кликнули по возврату к списку магазинов
+        if text == "🔙 К списку магазинов":
+            await state.clear()
+            shops = ShopRepository.get_all_shops()
+            if not shops:
+                await message.answer("😔 В системе пока нет зарегистрированных магазинов. Загляните позже!", reply_markup=get_main_menu(message.from_user.id))
+                return
+                
+            text_msg = (
+                "🏪 <b>Список доступных магазинов:</b>\n\n"
+                "Выберите магазин из списка ниже, чтобы перейти в его каталог:"
+            )
+            await message.answer("Вы вышли из магазина.", reply_markup=get_main_menu(message.from_user.id))
+            await message.answer(text_msg, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
+            return
+
