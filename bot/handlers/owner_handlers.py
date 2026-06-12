@@ -50,14 +50,16 @@ router.message.filter(ShopOwnerFilter())
 router.callback_query.filter(ShopOwnerFilter())
 
 
-@router.message(F.text.regexp(r"^/admin([a-zA-Z0-9_]+)1$"))
+@router.message(F.text.startswith("/admin"))
 async def cmd_owner_secret_login(message: Message, state: FSMContext):
     await state.clear()
-    match = re.match(r"^/admin([a-zA-Z0-9_]+)1$", message.text.strip())
-    if not match:
+    text = message.text.strip().lower()
+    
+    # Проверяем формат /admin<name>1
+    if not text.endswith("1") or len(text) <= 7:
         return
         
-    shop_slug = match.group(1).lower().strip()
+    shop_slug = text[6:-1].strip()
     
     # Получаем все магазины
     shops = ShopRepository.get_all_shops()
