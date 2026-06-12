@@ -1,67 +1,112 @@
-from aiogram import Bot
-from config import ADMIN_ID, PRODUCTS
-from db.database import create_order, clear_cart, get_cart, increment_user_orders, get_user_total_orders
 import csv
 from io import StringIO
+from aiogram import Bot
+from config.config import ADMIN_ID
+from database.repositories import OrderRepository, ProductRepository, UserRepository
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-def get_product_by_id(product_id: int):
-    return next((p for p in PRODUCTS if p["id"] == product_id), None)
-
-async def process_checkout(bot: Bot, user_id: int, username: str):
-    cart_items = get_cart(user_id)
-    if not cart_items:
-        return False, "Ваша корзина пуста."
-        
-    items_to_save = []
-    total_price = 0
-    order_text_items = []
-    
-    for c_item in cart_items:
-        p_id, qty = c_item
-        product = get_product_by_id(p_id)
-        if product:
-            items_to_save.append({
-                "name": product["name"],
-                "quantity": qty,
-                "price": product["price"]
-            })
-            total_price += product["price"] * qty
-            order_text_items.append(f"{product['name']} (x{qty}) - ${product['price'] * qty:.2f}")
-
-    # Check loyalty program (every 6th order)
-    increment_user_orders(user_id)
-    total_user_orders = get_user_total_orders(user_id)
-    
-    loyalty_text = ""
-    if total_user_orders % 6 == 0:
-         loyalty_text = "\n\n🎁 <b>Поздравляем! Это ваш 6-й заказ. Вы получаете бесплатный кофе или десерт при получении!</b>"
-         
-    username_str = username if username else str(user_id)
-    order_id = create_order(user_id, total_price, items_to_save)
-    clear_cart(user_id)
-    
-    # Notify Admin
-    if ADMIN_ID:
-        admin_text = (
-            f"🛒 <b>Новый заказ #{order_id}</b>\n\n"
-            f"👤 Клиент: @{username_str} ({user_id})\n"
-            f"📦 Состав заказа:\n" + "\n".join(f"- {it}" for it in order_text_items) +
-            f"\n\n💵 Сумма: ${total_price:.2f}"
-        )
-        try:
-            from bot.keyboards.keyboards import get_admin_order_keyboard
-            await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_keyboard(order_id), parse_mode="HTML")
-        except Exception as e:
-            print(f"Failed to notify admin: {e}")
-            
-    return True, f"✅ <b>Заказ #{order_id} успешно оформлен!</b>\n\nСумма: ${total_price:.2f}{loyalty_text}\n\nОжидайте уведомления о готовности."
-
-def export_orders_to_csv(orders_data):
+def export_orders_to_csv() -> bytes:
+    orders_data = OrderRepository.get_all_orders()
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Username', 'User ID', 'Total Price', 'Status', 'Created At', 'Items'])
-    for row in orders_data:
-        writer.writerow(row)
+    writer.writerow([
+        'ID Заказа', 'User ID', 'Имя', 'Телефон', 'Адрес', 
+        'ID Товара', 'Товар', 'Цена (сум/руб)', 'Статус', 'Дата'
+    ])
+    
+    for order in orders_data:
+        writer.writerow([
+            order['id'],
+            order['user_id'],
+            order['full_name'],
+            order['phone'],
+            order['address'],
+            order['product_id'],
+            order['product_name'],
+            order['product_price'],
+            order['status'],
+            order['created_at']
+        ])
     
     output.seek(0)
-    return output.read().encode('utf-8-sig') # returning bytes for aiogram
+    return output.read().encode('utf-8-sig')
+
+
+async def create_new_order(bot: Bot, user_id: int, full_name: str, phone: str, 
+                           address: str, product_id: int) -> Optional[int]:
+    # Получаем товар
+    product = ProductRepository.get_product_by_id(product_id)
+    if not product:
+        return None
+        
+    # Создаем заказ
+    order_id = OrderRepository.create_order(
+        user_id=user_id,
+        full_name=full_name,
+        phone=phone,
+        address=address,
+        product_id=product_id,
+        status='Новый'
+    )
+    
+    # Отправляем уведомление администратору
+    if ADMIN_ID:
+        try:
+            # Формируем красивое сообщение для админа
+            price_str = f"{product['price']} сум"
+            if product['is_discount']:
+                price_str = f"{product['price']} сум (🔥 Скидка, старая цена: {product['old_price']} сум)"
+                
+            admin_text = (
+                f"📥 <b>Новый заказ #{order_id}</b>\n\n"
+                f"👤 <b>Покупатель:</b> {full_name}\n"
+                f"📞 <b>Телефон:</b> {phone}\n"
+                f"📍 <b>Адрес доставки:</b> {address}\n\n"
+                f"📦 <b>Товар:</b> {product['name']}\n"
+                f"💰 <b>Цена:</b> {price_str}\n"
+                f"⏱ <b>Статус:</b> Новый\n"
+            )
+            
+            # Инлайн клавиатура для быстрого управления заказом администратором
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✏️ Изменить статус", callback_data=f"adm_status_menu_{order_id}")
+                ],
+                [
+                    InlineKeyboardButton(text="❌ Отменить заказ", callback_data=f"adm_change_status_{order_id}_Отменен"),
+                    InlineKeyboardButton(text="✅ Завершить заказ", callback_data=f"adm_change_status_{order_id}_Завершен")
+                ]
+            ])
+            
+            await bot.send_message(ADMIN_ID, admin_text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception as e:
+            print(f"Ошибка при отправке уведомления администратору: {e}")
+            
+    return order_id
+
+
+async def notify_status_change(bot: Bot, order_id: int, new_status: str, user_id: int):
+    status_emojis = {
+        'Новый': '⏳',
+        'Подтвержден': '✅',
+        'В обработке': '⚙️',
+        'Доставляется': '🚚',
+        'Завершен': '🎉',
+        'Отменен': '❌'
+    }
+    
+    emoji = status_emojis.get(new_status, '🔔')
+    order = OrderRepository.get_order_by_id(order_id)
+    product_name = order['product_name'] if order else "Товар"
+    
+    msg_text = (
+        f"{emoji} <b>Статус вашего заказа #{order_id} изменен!</b>\n\n"
+        f"📦 <b>Товар:</b> {product_name}\n"
+        f"🏷 <b>Новый статус:</b> {new_status}\n\n"
+        f"Спасибо, что выбираете магазин Keyllect! ❤️"
+    )
+    
+    try:
+        await bot.send_message(user_id, msg_text, parse_mode="HTML")
+    except Exception as e:
+        print(f"Не удалось отправить уведомление о смене статуса пользователю {user_id}: {e}")
