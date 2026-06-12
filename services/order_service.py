@@ -90,7 +90,10 @@ async def create_new_order(bot: Bot, shop_id: int, user_id: int, full_name: str,
     if not shop:
         return order_id
         
-    owner_id = shop['owner_id']
+    from config.config import get_shop_config
+    cfg = get_shop_config(shop['name'])
+    owner_id = cfg['owner_id']
+
     
     # Отправляем уведомление Владельцу Магазина (а не супер-админу!)
     try:

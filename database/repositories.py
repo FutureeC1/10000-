@@ -517,16 +517,33 @@ def seed_default_data(admin_id: int):
     if ShopRepository.get_shops_count() > 0:
         return
         
+    from config.config import KEYLLECT_OWNER_ID, GAMEZONEBUILD_OWNER_ID
+    
     # Создаем запись супер-админа
     UserRepository.add_user(admin_id, "admin", "Платформа Администратор", role='SUPER_ADMIN')
     
+    # Определяем ID владельцев
+    keyllect_owner = KEYLLECT_OWNER_ID or admin_id
+    gzb_owner = GAMEZONEBUILD_OWNER_ID or admin_id
+    
+    # Добавляем владельцев как пользователей в БД
+    if not UserRepository.get_user(keyllect_owner):
+        UserRepository.add_user(keyllect_owner, "keyllect_owner", "Владелец Keyllect", role='SHOP_OWNER')
+    else:
+        UserRepository.update_user_role(keyllect_owner, 'SHOP_OWNER')
+        
+    if not UserRepository.get_user(gzb_owner):
+        UserRepository.add_user(gzb_owner, "gamezone_owner", "Владелец GameZoneBuild", role='SHOP_OWNER')
+    else:
+        UserRepository.update_user_role(gzb_owner, 'SHOP_OWNER')
+        
     # 1. Создаем магазин Keyllect
     keyllect_id = ShopRepository.create_shop(
         name="Keyllect",
         description="Магазин игровых аксессуаров премиум-класса. Клавиатуры, мышки, наушники, коврики.",
         logo=None,
         telegram_username="keyllect_shop",
-        owner_id=admin_id
+        owner_id=keyllect_owner
     )
     
     # 2. Создаем магазин GameZoneBuild
@@ -535,8 +552,9 @@ def seed_default_data(admin_id: int):
         description="Готовые игровые ПК, сборка компьютеров под заказ и качественные комплектующие.",
         logo=None,
         telegram_username="gamezone_build",
-        owner_id=admin_id
+        owner_id=gzb_owner
     )
+
     
     # --- Товары для Keyllect ---
     ProductRepository.add_product(

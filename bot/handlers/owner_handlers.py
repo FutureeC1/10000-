@@ -65,9 +65,12 @@ async def cmd_owner_secret_login(message: Message, state: FSMContext):
         
     # Проверяем права владельца или супер-админа
     user_id = message.from_user.id
-    is_owner = ShopRepository.is_shop_owner(user_id, target_shop['id'])
-    from config.config import ADMIN_ID
+    from config.config import get_shop_config, ADMIN_ID
+    cfg = get_shop_config(target_shop['name'])
+    
+    is_owner = (user_id == cfg['owner_id'])
     is_super = (ADMIN_ID is not None and user_id == ADMIN_ID)
+
     
     if not is_owner and not is_super:
         await message.answer("❌ У вас нет прав для управления этим магазином.")

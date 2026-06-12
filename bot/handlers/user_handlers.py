@@ -63,7 +63,8 @@ async def cmd_shops(message: Message):
 
 
 @router.callback_query(F.data == "back_to_shops")
-async def callback_back_to_shops(callback: CallbackQuery):
+async def callback_back_to_shops(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     shops = ShopRepository.get_all_shops()
     if not shops:
         await callback.message.edit_text("😔 В системе пока нет зарегистрированных магазинов. Загляните позже!")
@@ -84,9 +85,12 @@ async def callback_back_to_shops(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("selectshop_"))
 @router.callback_query(F.data.startswith("back_to_categories_"))
-async def callback_select_shop(callback: CallbackQuery):
+async def callback_select_shop(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_")
     shop_id = int(parts[1]) if parts[0] == "selectshop" else int(parts[3])
+    
+    # Сохраняем текущий просматриваемый магазин в состояние
+    await state.update_data(current_shop_id=shop_id)
     
     shop = ShopRepository.get_shop_by_id(shop_id)
     if not shop:
@@ -125,6 +129,7 @@ async def callback_select_shop(callback: CallbackQuery):
             parse_mode="HTML"
         )
     await callback.answer()
+
 
 
 def format_product_text(product: dict, shop_name: str) -> str:
@@ -471,13 +476,28 @@ async def callback_fav_remove(callback: CallbackQuery):
 # ==========================================
 
 @router.message(F.text == "📞 Поддержка")
-async def cmd_support(message: Message):
+async def cmd_support(message: Message, state: FSMContext):
+    state_data = await state.get_data()
+    shop_id = state_data.get('current_shop_id')
+    
+    manager_username = MANAGER_USERNAME
+    shop_name = "платформы"
+    
+    if shop_id:
+        shop = ShopRepository.get_shop_by_id(shop_id)
+        if shop:
+            from config.config import get_shop_config
+            cfg = get_shop_config(shop['name'])
+            manager_username = cfg['manager_username']
+            shop_name = f"магазина «{shop['name']}»"
+            
     text = (
-        "📞 <b>Служба поддержки пользователей</b>\n\n"
-        "Если у вас возникли вопросы по работе платформы, оформлению заказов или вам нужна консультация, "
-        "нажмите на кнопку ниже, чтобы написать нашему дежурному менеджеру."
+        f"📞 <b>Служба поддержки {shop_name}</b>\n\n"
+        "Если у вас возникли вопросы по работе магазина, качеству товаров или оформлению заказов, "
+        "нажмите на кнопку ниже, чтобы связаться с дежурным менеджером."
     )
-    await message.answer(text, reply_markup=get_support_keyboard(MANAGER_USERNAME), parse_mode="HTML")
+    await message.answer(text, reply_markup=get_support_keyboard(manager_username), parse_mode="HTML")
+
 
 
 @router.message(F.text == "📦 Мои заказы")
