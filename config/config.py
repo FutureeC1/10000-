@@ -26,6 +26,10 @@ except ValueError:
     GAMEZONEBUILD_OWNER_ID = None
 GAMEZONEBUILD_MANAGER_USERNAME = os.getenv("GAMEZONEBUILD_MANAGER_USERNAME", "Kas1mov_sa")
 
+# Дефолтный менеджер платформы для совместимости импортов
+MANAGER_USERNAME = os.getenv("MANAGER_USERNAME", "Kas1mov_sa")
+
+
 
 def get_shop_config(shop_name_or_id) -> dict:
     """Возвращает настройки владельца и менеджера на основе названия или ID магазина."""
