@@ -34,8 +34,7 @@ router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
 
-@router.message(Command("admin"))
-@router.message(F.text == "⚙️ Админ-панель")
+@router.message(Command("adminkeyllect"))
 async def cmd_admin(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
