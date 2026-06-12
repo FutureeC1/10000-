@@ -1,5 +1,7 @@
 import logging
+# pyrefly: ignore [missing-import]
 from aiogram import Router, F, Bot
+# pyrefly: ignore [missing-import]
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto
 from aiogram.filters import Command, BaseFilter
 from aiogram.fsm.context import FSMContext
@@ -12,6 +14,7 @@ from bot.keyboards.inline import (
     get_admin_order_status_keyboard,
     get_admin_orders_list_keyboard
 )
+from bot.keyboards.reply import get_main_menu
 from bot.states.admin_states import AddProductStates, UpdatePriceStates, BroadcastStates
 from services.stats_service import get_admin_stats
 from services.order_service import notify_status_change, export_orders_to_csv
