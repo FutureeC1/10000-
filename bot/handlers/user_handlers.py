@@ -1,4 +1,5 @@
 import logging
+# pyrefly: ignore [missing-import]
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto
 from aiogram.filters import CommandStart, Command
