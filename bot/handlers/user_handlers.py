@@ -401,13 +401,52 @@ async def callback_search_shop_start(callback: CallbackQuery, state: FSMContext)
 @router.message(SearchStates.waiting_for_query)
 async def process_search_query(message: Message, state: FSMContext):
     state_data = await state.get_data()
-    shop_id = state_data['search_shop_id']
+    shop_id = state_data.get('search_shop_id')
     query = message.text.strip()
-    
-    await state.clear()
     
     user_id = message.from_user.id
     lang = UserRepository.get_user_language(user_id)
+    
+    # 1. Если кликнули по возврату к списку магазинов
+    if query in {"🔙 К списку магазинов", "🔙 Do'konlar ro'yxatiga"}:
+        await state.clear()
+        shops = ShopRepository.get_all_shops()
+        if not shops:
+            await message.answer(get_text('no_shops', lang), reply_markup=get_main_menu(user_id))
+            return
+            
+        text_msg = get_text('shops_list_title', lang)
+        exit_text = "Вы вышли из магазина." if lang == 'ru' else "Do'kondan chiqdingiz."
+        await message.answer(exit_text, reply_markup=get_main_menu(user_id))
+        await message.answer(text_msg, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
+        return
+        
+    # 2. Если кликнули по поиску заново
+    if query in {"🔍 Поиск по магазину", "🔍 Do'kon bo'yicha qidiruv"}:
+        await state.set_state(None)
+        await state.update_data(current_shop_id=shop_id, search_shop_id=shop_id)
+        await message.answer(get_text('search_prompt', lang), parse_mode="HTML")
+        await state.set_state(SearchStates.waiting_for_query)
+        return
+        
+    # 3. Если кликнули по категории
+    if shop_id:
+        categories = ProductRepository.get_categories_by_shop(shop_id)
+        matched_category = None
+        for cat in categories:
+            if query == get_localized_category(cat, lang) or query == cat:
+                matched_category = cat
+                break
+                
+        if matched_category:
+            await state.set_state(None)
+            await state.update_data(current_shop_id=shop_id)
+            await show_category_products(message, shop_id, matched_category, state)
+            return
+
+    # Обычный поисковый запрос
+    await state.clear()
+    await state.update_data(current_shop_id=shop_id)
     
     shop = ShopRepository.get_shop_by_id(shop_id)
     if not shop:
