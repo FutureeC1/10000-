@@ -964,6 +964,20 @@ async def process_shop_menu_click(message: Message, state: FSMContext):
     user_id = message.from_user.id
     lang = UserRepository.get_user_language(user_id)
     
+    # Возврат к списку магазинов — всегда работает, даже если state был очищен
+    if text in {"🔙 К списку магазинов", "🔙 Do'konlar ro'yxatiga"}:
+        await state.clear()
+        shops = ShopRepository.get_all_shops()
+        if not shops:
+            await message.answer(get_text('no_shops', lang), reply_markup=get_main_menu(user_id))
+            return
+            
+        text_msg = get_text('shops_list_title', lang)
+        exit_text = "Вы вышли из магазина." if lang == 'ru' else "Do'kondan chiqdingiz."
+        await message.answer(exit_text, reply_markup=get_main_menu(user_id))
+        await message.answer(text_msg, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
+        return
+    
     state_data = await state.get_data()
     shop_id = state_data.get('current_shop_id')
     
@@ -987,18 +1001,3 @@ async def process_shop_menu_click(message: Message, state: FSMContext):
             await message.answer(get_text('search_prompt', lang), parse_mode="HTML")
             await state.set_state(SearchStates.waiting_for_query)
             return
-            
-        # 3. Если кликнули по возврату к списку магазинов
-        if text in {"🔙 К списку магазинов", "🔙 Do'konlar ro'yxatiga"}:
-            await state.clear()
-            shops = ShopRepository.get_all_shops()
-            if not shops:
-                await message.answer(get_text('no_shops', lang), reply_markup=get_main_menu(user_id))
-                return
-                
-            text_msg = get_text('shops_list_title', lang)
-            exit_text = "Вы вышли из магазина." if lang == 'ru' else "Do'kondan chiqdingiz."
-            await message.answer(exit_text, reply_markup=get_main_menu(user_id))
-            await message.answer(text_msg, reply_markup=get_shops_list_keyboard(shops), parse_mode="HTML")
-            return
-
