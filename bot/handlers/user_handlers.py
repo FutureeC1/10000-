@@ -182,21 +182,31 @@ def format_product_text(product: dict, shop_name: str, lang: str = 'ru') -> str:
     if product['stock_status'] != 1:
         status_str = "❌ Нет в наличии" if lang == 'ru' else "❌ Mavjud emas"
         
+    is_usd = "gamezone" in shop_name.lower()
     price_text = ""
-    currency_str = "UZS"
+    
     if product['is_discount']:
         price_text = (
             f"🔥 <b>Скидка!</b>\n" if lang == 'ru' else f"🔥 <b>Chegirma!</b>\n"
         )
         old_price_label = "Старая цена" if lang == 'ru' else "Eski narxi"
         new_price_label = "Новая цена" if lang == 'ru' else "Yangi narxi"
-        price_text += (
-            f"<s>{old_price_label}: {product['old_price']:,} {currency_str}</s>\n"
-            f"<b>{new_price_label}: {product['price']:,} {currency_str}</b>"
-        )
+        if is_usd:
+            price_text += (
+                f"<s>{old_price_label}: ${product['old_price']:,}</s>\n"
+                f"<b>{new_price_label}: ${product['price']:,}</b>"
+            )
+        else:
+            price_text += (
+                f"<s>{old_price_label}: {product['old_price']:,} UZS</s>\n"
+                f"<b>{new_price_label}: {product['price']:,} UZS</b>"
+            )
     else:
         price_label = "Цена" if lang == 'ru' else "Narxi"
-        price_text = f"<b>{price_label}: {product['price']:,} {currency_str}</b>"
+        if is_usd:
+            price_text = f"<b>{price_label}: ${product['price']:,}</b>"
+        else:
+            price_text = f"<b>{price_label}: {product['price']:,} UZS</b>"
         
     shop_label = "Магазин" if lang == 'ru' else "Do'kon"
     cat_label = "Категория" if lang == 'ru' else "Kategoriya"
@@ -639,10 +649,16 @@ async def cmd_my_orders(message: Message):
         status_label = "Holati" if lang == 'uz' else "Статус"
         date_label = "Sana" if lang == 'uz' else "Дата"
         
+        is_usd = "gamezone" in order['shop_name'].lower()
+        if is_usd:
+            order_price_str = f"${order['product_price']:,}"
+        else:
+            order_price_str = f"{order['product_price']:,} сум" if lang == 'ru' else f"{order['product_price']:,} so'm"
+            
         text += (
             f"🔹 <b>Заказ #{order['id']} {order['shop_name']} {shop_label}</b>\n"
             f"🛒 {item_label}: {order['product_name']}\n"
-            f"💰 {price_label}: {order['product_price']:,} сум\n"
+            f"💰 {price_label}: {order_price_str}\n"
             f"⏱ {status_label}: {emoji} {status_val}\n"
             f"📅 {date_label}: {order['created_at']}\n\n"
         )
@@ -773,9 +789,15 @@ async def process_order_address(message: Message, state: FSMContext):
         await state.clear()
         return
         
-    price_str = f"{product['price']:,} сум" if lang == 'ru' else f"{product['price']:,} so'm"
-    if product['is_discount']:
-        price_str += " (скидка 🔥)" if lang == 'ru' else " (chegirma 🔥)"
+    is_usd = "gamezone" in shop['name'].lower()
+    if is_usd:
+        price_str = f"${product['price']:,}"
+        if product['is_discount']:
+            price_str += " (скидка 🔥)" if lang == 'ru' else " (chegirma 🔥)"
+    else:
+        price_str = f"{product['price']:,} сум" if lang == 'ru' else f"{product['price']:,} so'm"
+        if product['is_discount']:
+            price_str += " (скидка 🔥)" if lang == 'ru' else " (chegirma 🔥)"
         
     preview_text = (
         "🧐 <b>Проверьте правильность введенных данных:</b>\n\n"
