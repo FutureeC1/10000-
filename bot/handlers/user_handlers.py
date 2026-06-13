@@ -484,6 +484,7 @@ async def process_search_query(message: Message, state: FSMContext):
 # ИЗБРАННОЕ (ДОСТУПНО ПО КОМАНДЕ /favorites)
 # ==========================================
 
+@router.message(F.text.in_({"⭐ Избранное", "⭐ Sevimlilar"}))
 @router.message(Command("favorites"))
 async def cmd_favorites(message: Message):
     user_id = message.from_user.id

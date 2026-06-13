@@ -10,6 +10,7 @@ LOCALIZATION = {
         # Кнопки меню
         'btn_shops': "🏪 Магазины",
         'btn_orders': "📦 Мои заказы",
+        'btn_favorites': "⭐ Избранное",
         'btn_lang': "🌐 Язык / Til",
         
         # Выбор языка
@@ -84,6 +85,7 @@ LOCALIZATION = {
         # Кнопки меню
         'btn_shops': "🏪 Do'konlar",
         'btn_orders': "📦 Buyurtmalarim",
+        'btn_favorites': "⭐ Sevimlilar",
         'btn_lang': "🌐 Til / Язык",
         
         # Выбор языка
