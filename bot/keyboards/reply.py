@@ -1,19 +1,22 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from database.repositories import UserRepository
+from config.localization import get_text
 
 def get_main_menu(user_id: int) -> ReplyKeyboardMarkup:
-    """Генерирует главное Reply-меню клиента. 
-    Оно одинаково для всех пользователей в целях безопасности (скрытие админ-панелей)."""
+    """Генерирует главное Reply-меню клиента."""
+    lang = UserRepository.get_user_language(user_id)
     keyboard_buttons = [
-        [KeyboardButton(text="🏪 Магазины"), KeyboardButton(text="📦 Мои заказы")]
+        [KeyboardButton(text=get_text('btn_shops', lang)), KeyboardButton(text=get_text('btn_orders', lang))],
+        [KeyboardButton(text=get_text('btn_lang', lang))]
     ]
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
-        placeholder="Выберите действие..."
+        placeholder="Выберите действие..." if lang == 'ru' else "Harakatni tanlang..."
     )
 
 
-def get_shop_menu_keyboard(categories: list) -> ReplyKeyboardMarkup:
+def get_shop_menu_keyboard(categories: list, lang: str = 'ru') -> ReplyKeyboardMarkup:
     """Генерирует Reply-меню для конкретного магазина, выводя категории в клавиатуру."""
     keyboard_buttons = []
     
@@ -26,13 +29,13 @@ def get_shop_menu_keyboard(categories: list) -> ReplyKeyboardMarkup:
         
     # Добавляем функциональные кнопки
     keyboard_buttons.append([
-        KeyboardButton(text="🔍 Поиск по магазину"),
-        KeyboardButton(text="🔙 К списку магазинов")
+        KeyboardButton(text=get_text('btn_search', lang)),
+        KeyboardButton(text=get_text('btn_back_to_shops', lang))
     ])
     
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
-        placeholder="Выберите категорию товаров..."
+        placeholder="Выберите категорию товаров..." if lang == 'ru' else "Mahsulot kategoriyasini tanlang..."
     )
 

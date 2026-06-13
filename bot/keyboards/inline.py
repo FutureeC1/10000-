@@ -1,9 +1,17 @@
+# pyrefly: ignore [missing-import]
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List
+from config.localization import get_text
 
-# ==========================================
-# КЛИЕНТСКИЕ КЛАВИАТУРЫ
-# ==========================================
+def get_language_keyboard() -> InlineKeyboardMarkup:
+    """Генерирует клавиатуру выбора языка (Русский / O'zbekcha)."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang_ru"),
+            InlineKeyboardButton(text="🇺🇿 O'zbekcha", callback_data="lang_uz")
+        ]
+    ])
+
 
 def get_shops_list_keyboard(shops: List[dict]) -> InlineKeyboardMarkup:
     """Список магазинов для клиента."""
@@ -13,7 +21,7 @@ def get_shops_list_keyboard(shops: List[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_shop_categories_keyboard(shop_id: int, categories: List[str]) -> InlineKeyboardMarkup:
+def get_shop_categories_keyboard(shop_id: int, categories: List[str], lang: str = 'ru') -> InlineKeyboardMarkup:
     """Список категорий товаров в выбранном магазине."""
     keyboard = []
     for i in range(0, len(categories), 2):
@@ -22,22 +30,22 @@ def get_shop_categories_keyboard(shop_id: int, categories: List[str]) -> InlineK
             row.append(InlineKeyboardButton(text=cat, callback_data=f"shopcat_{shop_id}_{cat}"))
         keyboard.append(row)
         
-    keyboard.append([InlineKeyboardButton(text="🔍 Поиск по магазину", callback_data=f"shopsearch_{shop_id}")])
-    keyboard.append([InlineKeyboardButton(text="📁 К списку магазинов", callback_data="back_to_shops")])
+    keyboard.append([InlineKeyboardButton(text=get_text('btn_search', lang), callback_data=f"shopsearch_{shop_id}")])
+    keyboard.append([InlineKeyboardButton(text=get_text('btn_back_to_shops', lang), callback_data="back_to_shops")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_product_detail_keyboard(product_id: int, shop_id: int, category: str, current_index: int, 
-                                 total_count: int, is_fav: bool, is_available: bool) -> InlineKeyboardMarkup:
+                                 total_count: int, is_fav: bool, is_available: bool, lang: str = 'ru') -> InlineKeyboardMarkup:
     """Карточка товара с пагинацией для клиента."""
     keyboard = []
     
     # Кнопки действия (Заказать, Избранное)
     action_row = []
     if is_available:
-        action_row.append(InlineKeyboardButton(text="🛒 Заказать", callback_data=f"order_{shop_id}_{product_id}"))
+        action_row.append(InlineKeyboardButton(text=get_text('btn_add_to_cart', lang), callback_data=f"order_{shop_id}_{product_id}"))
     
-    fav_text = "❌ Убрать из Избранного" if is_fav else "⭐ В Избранное"
+    fav_text = get_text('btn_unfavorite', lang) if is_fav else get_text('btn_favorite', lang)
     action_row.append(InlineKeyboardButton(text=fav_text, callback_data=f"fav_{product_id}_{current_index}"))
     keyboard.append(action_row)
     
@@ -51,19 +59,18 @@ def get_product_detail_keyboard(product_id: int, shop_id: int, category: str, cu
         pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"nav_{shop_id}_{category}_{next_idx}"))
         keyboard.append(pagination_row)
         
-    keyboard.append([InlineKeyboardButton(text="📁 К категориям", callback_data=f"back_to_categories_{shop_id}")])
+    keyboard.append([InlineKeyboardButton(text=get_text('btn_back', lang), callback_data=f"back_to_categories_{shop_id}")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_favorites_keyboard(product_id: int, current_index: int, total_count: int) -> InlineKeyboardMarkup:
+def get_favorites_keyboard(product_id: int, current_index: int, total_count: int, lang: str = 'ru') -> InlineKeyboardMarkup:
     """Клавиатура для просмотра Избранного."""
     keyboard = []
     
     # Кнопка Заказать и Удалить
     keyboard.append([
-        # В БД товар привязан к shop_id, мы можем извлечь его при заказе, поэтому callback_data содержит только ID товара
-        InlineKeyboardButton(text="🛒 Заказать", callback_data=f"order_fav_{product_id}"),
-        InlineKeyboardButton(text="❌ Удалить", callback_data=f"unfav_{product_id}_{current_index}")
+        InlineKeyboardButton(text=get_text('btn_add_to_cart', lang), callback_data=f"order_fav_{product_id}"),
+        InlineKeyboardButton(text="❌ " + ("Удалить" if lang == 'ru' else "O'chirish"), callback_data=f"unfav_{product_id}_{current_index}")
     ])
     
     # Пагинация
@@ -79,12 +86,12 @@ def get_favorites_keyboard(product_id: int, current_index: int, total_count: int
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_confirm_order_keyboard() -> InlineKeyboardMarkup:
+def get_confirm_order_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """Подтверждение заказа."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="✅ Подтверждаю", callback_data="confirm_order_yes"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="confirm_order_no")
+            InlineKeyboardButton(text="✅ " + ("Подтверждаю" if lang == 'ru' else "Tasdiqlayman"), callback_data="confirm_order_yes"),
+            InlineKeyboardButton(text="❌ " + ("Отмена" if lang == 'ru' else "Bekor qilish"), callback_data="confirm_order_no")
         ]
     ])
 

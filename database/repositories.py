@@ -12,9 +12,14 @@ def init_db():
             username TEXT,
             full_name TEXT,
             role TEXT DEFAULT 'CUSTOMER',
+            language TEXT DEFAULT 'ru',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'ru'")
+    except Exception:
+        pass
     
     # 2. Таблица магазинов (tenant)
     cursor.execute("""
@@ -105,6 +110,23 @@ class UserRepository:
         cursor.execute("UPDATE users SET role = ? WHERE user_id = ?", (role, user_id))
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def update_user_language(user_id: int, language: str):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET language = ? WHERE user_id = ?", (language, user_id))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_user_language(user_id: int) -> str:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT language FROM users WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return row['language'] if row and row['language'] else 'ru'
 
     @staticmethod
     def get_user(user_id: int) -> Optional[dict]:
@@ -591,14 +613,29 @@ def seed_default_data(admin_id: int):
                 stock_status=stock_status
             )
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # --- Товары для Keyllect ---
     add_product_if_not_exists(
         shop_id=keyllect_id,
         category="Клавиатуры",
-        name="Механическая клавиатура Keyllect K80 RGB",
+        name="AJJAZ AK 820 AS Механическая ",
         description="Механическая клавиатура с переключателями Gateron Red, горячей заменой (Hot-swap) и настраиваемой RGB подсветкой.",
         price=950000.0,
-        photo="https://images.unsplash.com/photo-1595225476474-87563907a212?w=600"
+        photo=""
     )
     add_product_if_not_exists(
         shop_id=keyllect_id,
@@ -617,6 +654,25 @@ def seed_default_data(admin_id: int):
         photo="https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=600"
     )
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # --- Товары для GameZoneBuild ---
     add_product_if_not_exists(
         shop_id=gzb_id,
@@ -650,5 +706,6 @@ def seed_default_data(admin_id: int):
         price=5100000.0,
         photo="https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?w=600"
     )
+
 
 
