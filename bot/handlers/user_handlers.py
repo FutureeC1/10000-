@@ -7,13 +7,14 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 
 from config.config import MANAGER_USERNAME
-from database.repositories import UserRepository, ShopRepository, ProductRepository, OrderRepository, FavoriteRepository
+from database.repositories import UserRepository, ShopRepository, ProductRepository, OrderRepository, FavoriteRepository, CartRepository
 from bot.keyboards.reply import get_main_menu, get_shop_menu_keyboard
 from bot.keyboards.inline import (
     get_shops_list_keyboard,
     get_shop_categories_keyboard,
     get_product_detail_keyboard,
     get_favorites_keyboard,
+    get_cart_keyboard,
     get_confirm_order_keyboard,
     get_support_keyboard,
     get_language_keyboard
@@ -616,6 +617,156 @@ async def callback_fav_remove(callback: CallbackQuery):
 
 
 # ==========================================
+# КОРЗИНА
+# ==========================================
+
+@router.callback_query(F.data.startswith("addcart_"))
+async def callback_add_to_cart(callback: CallbackQuery):
+    product_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    lang = UserRepository.get_user_language(user_id)
+    
+    product = ProductRepository.get_product_by_id(product_id)
+    if not product or product['stock_status'] == 0:
+        not_avail = "Товар недоступен." if lang == 'ru' else "Mahsulot mavjud emas."
+        await callback.answer(not_avail, show_alert=True)
+        return
+    
+    CartRepository.add_to_cart(user_id, product_id)
+    count = CartRepository.get_cart_count(user_id)
+    
+    added_text = (
+        f"✅ «{product['name']}» добавлен в корзину! (Товаров: {count})"
+        if lang == 'ru' else
+        f"✅ «{product['name']}» savatga qo'shildi! (Mahsulotlar: {count})"
+    )
+    await callback.answer(added_text, show_alert=True)
+
+
+@router.message(F.text.in_({"🛒 Корзина", "🛒 Savat"}))
+async def cmd_cart(message: Message):
+    user_id = message.from_user.id
+    lang = UserRepository.get_user_language(user_id)
+    cart_items = CartRepository.get_cart_items(user_id)
+    
+    if not cart_items:
+        empty_text = (
+            "🛒 <b>Ваша корзина пуста.</b>\nДобавляйте товары из каталога магазинов!"
+            if lang == 'ru' else
+            "🛒 <b>Savatingiz bo'sh.</b>\nDo'konlar katalogidan mahsulotlarni qo'shing!"
+        )
+        await message.answer(empty_text, parse_mode="HTML")
+        return
+    
+    text = "🛒 <b>" + ("Ваша корзина:" if lang == 'ru' else "Savatingiz:") + "</b>\n\n"
+    total = 0
+    for item in cart_items:
+        shop_name = item['shop_name']
+        is_usd = 'gamezone' in shop_name.lower()
+        currency = "$" if is_usd else " UZS"
+        line_total = item['price'] * item['quantity']
+        total += line_total
+        if is_usd:
+            text += f"• <b>{item['name']}</b> (x{item['quantity']}) — ${line_total:,.2f}\n  🏪 {shop_name}\n"
+        else:
+            text += f"• <b>{item['name']}</b> (x{item['quantity']}) — {line_total:,.0f} UZS\n  🏪 {shop_name}\n"
+    
+    text += "\n" + ("Нажмите на товар, чтобы удалить его из корзины." if lang == 'ru' else "Mahsulotni savatdan oʻchirish uchun ustiga bosing.")
+    
+    reply_markup = get_cart_keyboard(cart_items, lang)
+    await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("cartdel_"))
+async def callback_cart_delete_item(callback: CallbackQuery):
+    product_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    lang = UserRepository.get_user_language(user_id)
+    
+    CartRepository.remove_from_cart(user_id, product_id)
+    removed_text = "✅ Удалено из корзины!" if lang == 'ru' else "✅ Savatdan o'chirildi!"
+    await callback.answer(removed_text)
+    
+    # Обновляем корзину
+    cart_items = CartRepository.get_cart_items(user_id)
+    if not cart_items:
+        empty_text = "🛒 <b>" + ("Корзина пуста." if lang == 'ru' else "Savat bo'sh.") + "</b>"
+        try:
+            await callback.message.edit_text(empty_text, parse_mode="HTML")
+        except Exception:
+            pass
+        return
+    
+    text = "🛒 <b>" + ("Ваша корзина:" if lang == 'ru' else "Savatingiz:") + "</b>\n\n"
+    for item in cart_items:
+        shop_name = item['shop_name']
+        is_usd = 'gamezone' in shop_name.lower()
+        line_total = item['price'] * item['quantity']
+        if is_usd:
+            text += f"• <b>{item['name']}</b> (x{item['quantity']}) — ${line_total:,.2f}\n  🏪 {shop_name}\n"
+        else:
+            text += f"• <b>{item['name']}</b> (x{item['quantity']}) — {line_total:,.0f} UZS\n  🏪 {shop_name}\n"
+    
+    text += "\n" + ("Нажмите на товар, чтобы удалить его из корзины." if lang == 'ru' else "Mahsulotni savatdan oʻchirish uchun ustiga bosing.")
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=get_cart_keyboard(cart_items, lang), parse_mode="HTML")
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "cart_clear")
+async def callback_cart_clear(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    lang = UserRepository.get_user_language(user_id)
+    CartRepository.clear_cart(user_id)
+    cleared_text = "🗑 <b>" + ("Корзина очищена!" if lang == 'ru' else "Savat tozalandi!") + "</b>"
+    try:
+        await callback.message.edit_text(cleared_text, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cart_checkout")
+async def callback_cart_checkout(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    lang = UserRepository.get_user_language(user_id)
+    cart_items = CartRepository.get_cart_items(user_id)
+    
+    if not cart_items:
+        empty_text = "Корзина пуста." if lang == 'ru' else "Savat bo'sh."
+        await callback.answer(empty_text, show_alert=True)
+        return
+    
+    # Сохраняем ID товаров из корзины в state
+    cart_product_ids = [item['id'] for item in cart_items]
+    cart_quantities = {item['id']: item['quantity'] for item in cart_items}
+    await state.clear()
+    await state.update_data(
+        cart_mode=True,
+        cart_product_ids=cart_product_ids,
+        cart_quantities=cart_quantities
+    )
+    
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    
+    step1_text = (
+        "📝 <b>Оформление заказа из корзины</b>\n\n"
+        "Шаг 1 из 3: Введите ваше <b>Имя и Фамилию</b>:"
+        if lang == 'ru' else
+        "📝 <b>Savatdan buyurtmani rasmiylashtirish</b>\n\n"
+        "1-qadam (3 dan): <b>Ism va familiyangizni</b> kiriting:"
+    )
+    await callback.message.answer(step1_text, parse_mode="HTML")
+    await state.set_state(OrderStates.waiting_for_name)
+    await callback.answer()
+
+
+# ==========================================
 # ПОДДЕРЖКА И ЗАКАЗЫ КЛИЕНТА
 # ==========================================
 
@@ -817,6 +968,35 @@ async def process_order_address(message: Message, state: FSMContext):
     await state.update_data(address=address)
     
     data = await state.get_data()
+    
+    # --- Режим корзины ---
+    if data.get('cart_mode'):
+        cart_items = CartRepository.get_cart_items(user_id)
+        if not cart_items:
+            await message.answer("Корзина пуста." if lang == 'ru' else "Savat bo'sh.")
+            await state.clear()
+            return
+        
+        preview_text = "🧐 <b>" + ("Проверьте заказ из корзины:" if lang == 'ru' else "Savatdagi buyurtmani tekshiring:") + "</b>\n\n"
+        for item in cart_items:
+            shop = ShopRepository.get_shop_by_id(item['shop_id'])
+            is_usd = 'gamezone' in (shop['name'] if shop else '').lower()
+            line_total = item['price'] * item['quantity']
+            if is_usd:
+                preview_text += f"• <b>{item['name']}</b> (x{item['quantity']}) — ${line_total:,.2f}  🏪 {item['shop_name']}\n"
+            else:
+                preview_text += f"• <b>{item['name']}</b> (x{item['quantity']}) — {line_total:,.0f} UZS  🏪 {item['shop_name']}\n"
+        
+        preview_text += f"\n👤 <b>" + ("Получатель:" if lang == 'ru' else "Qabul qiluvchi:") + f"</b> {data['name']}\n"
+        preview_text += f"📞 <b>" + ("Телефон:" if lang == 'ru' else "Telefon:") + f"</b> {data['phone']}\n"
+        preview_text += f"📍 <b>" + ("Адрес доставки:" if lang == 'ru' else "Yetkazib berish manzili:") + f"</b> {address}\n\n"
+        preview_text += "Все верно? Подтвердите заказ." if lang == 'ru' else "Hammasi to'g'rimi? Buyurtmani tasdiqlang."
+        
+        await message.answer(preview_text, reply_markup=get_confirm_order_keyboard(lang), parse_mode="HTML")
+        await state.set_state(OrderStates.waiting_for_confirm)
+        return
+    
+    # --- Обычный режим (один товар) ---
     product = ProductRepository.get_product_by_id(data['product_id'])
     shop = ShopRepository.get_shop_by_id(data['shop_id'])
     
@@ -880,6 +1060,51 @@ async def process_order_confirm(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     await state.clear()
     
+    # --- Режим корзины ---
+    if data.get('cart_mode'):
+        cart_items = CartRepository.get_cart_items(user_id)
+        if not cart_items:
+            await callback.message.edit_text("Корзина пуста." if lang == 'ru' else "Savat bo'sh.")
+            await callback.answer()
+            return
+        
+        order_ids = []
+        for item in cart_items:
+            for _ in range(item['quantity']):
+                oid = await create_new_order(
+                    bot=callback.bot,
+                    shop_id=item['shop_id'],
+                    user_id=user_id,
+                    full_name=data['name'],
+                    phone=data['phone'],
+                    address=data['address'],
+                    product_id=item['id']
+                )
+                if oid:
+                    order_ids.append(oid)
+        
+        CartRepository.clear_cart(user_id)
+        
+        if order_ids:
+            ids_str = ", #".join(str(o) for o in order_ids)
+            success_text = (
+                f"🎉 <b>Заказы #{ids_str} успешно оформлены!</b>\n\n"
+                "Владельцы магазинов уведомлены и скоро свяжутся с вами.\n"
+                "Вы будете получать уведомления об изменении статусов заказов здесь. 🔔"
+                if lang == 'ru' else
+                f"🎉 <b>Buyurtmalar #{ids_str} muvaffaqiyatli rasmiylashtirildi!</b>\n\n"
+                "Do'kon egalari xabardor qilindi va tez orada siz bilan bog'lanadi.\n"
+                "Buyurtmalaringiz holati o'zgarganda bu yerda xabar olasiz. 🔔"
+            )
+            await callback.message.edit_text(success_text, parse_mode="HTML")
+        else:
+            error_text = "😔 " + ("Ошибка при оформлении заказов." if lang == 'ru' else "Buyurtmalarni rasmiylashtirishda xatolik.")
+            await callback.message.edit_text(error_text)
+        
+        await callback.answer()
+        return
+    
+    # --- Обычный режим ---
     order_id = await create_new_order(
         bot=callback.bot,
         shop_id=data['shop_id'],

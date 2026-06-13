@@ -7,7 +7,8 @@ def get_main_menu(user_id: int) -> ReplyKeyboardMarkup:
     lang = UserRepository.get_user_language(user_id)
     keyboard_buttons = [
         [KeyboardButton(text=get_text('btn_shops', lang)), KeyboardButton(text=get_text('btn_orders', lang))],
-        [KeyboardButton(text=get_text('btn_favorites', lang)), KeyboardButton(text=get_text('btn_lang', lang))]
+        [KeyboardButton(text=get_text('btn_cart_menu', lang)), KeyboardButton(text=get_text('btn_favorites', lang))],
+        [KeyboardButton(text=get_text('btn_lang', lang))]
     ]
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,

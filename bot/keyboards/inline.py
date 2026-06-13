@@ -40,14 +40,15 @@ def get_product_detail_keyboard(product_id: int, shop_id: int, category: str, cu
     """Карточка товара с пагинацией для клиента."""
     keyboard = []
     
-    # Кнопки действия (Заказать, Избранное)
-    action_row = []
+    # Кнопки действия (Корзина, Быстрый заказ, Избранное)
     if is_available:
-        action_row.append(InlineKeyboardButton(text=get_text('btn_add_to_cart', lang), callback_data=f"order_{shop_id}_{product_id}"))
+        keyboard.append([
+            InlineKeyboardButton(text=get_text('btn_add_to_cart', lang), callback_data=f"addcart_{product_id}"),
+            InlineKeyboardButton(text="🛍 " + ("Купить" if lang == 'ru' else "Sotib olish"), callback_data=f"order_{shop_id}_{product_id}")
+        ])
     
     fav_text = get_text('btn_unfavorite', lang) if is_fav else get_text('btn_favorite', lang)
-    action_row.append(InlineKeyboardButton(text=fav_text, callback_data=f"fav_{product_id}_{current_index}"))
-    keyboard.append(action_row)
+    keyboard.append([InlineKeyboardButton(text=fav_text, callback_data=f"fav_{product_id}_{current_index}")])
     
     # Пагинация
     pagination_row = []
@@ -83,6 +84,33 @@ def get_favorites_keyboard(product_id: int, current_index: int, total_count: int
         pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"favnav_{next_idx}"))
         keyboard.append(pagination_row)
         
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_cart_keyboard(cart_items: list, lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура корзины с кнопками удаления и оформления."""
+    keyboard = []
+    
+    for item in cart_items:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"❌ {item['name']} (x{item['quantity']})",
+                callback_data=f"cartdel_{item['id']}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🛍 " + ("Оформить всё" if lang == 'ru' else "Barchasini rasmiylashtirish"),
+            callback_data="cart_checkout"
+        )
+    ])
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🗑 " + ("Очистить корзину" if lang == 'ru' else "Savatni tozalash"),
+            callback_data="cart_clear"
+        )
+    ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

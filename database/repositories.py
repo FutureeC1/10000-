@@ -81,6 +81,19 @@ def init_db():
         )
     """)
     
+    # 6. Таблица корзины
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cart (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER DEFAULT 1,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -500,6 +513,70 @@ class OrderRepository:
         row = cursor.fetchone()
         conn.close()
         return row['cnt'] if row else 0
+
+
+class CartRepository:
+    @staticmethod
+    def add_to_cart(user_id: int, product_id: int) -> bool:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            # Если товар уже в корзине — увеличиваем кол-во
+            cursor.execute("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?", (user_id, product_id))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("UPDATE cart SET quantity = quantity + 1 WHERE id = ?", (row['id'],))
+            else:
+                cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, 1)", (user_id, product_id))
+            conn.commit()
+            return True
+        except Exception:
+            return False
+        finally:
+            conn.close()
+
+    @staticmethod
+    def remove_from_cart(user_id: int, product_id: int) -> bool:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cart WHERE user_id = ? AND product_id = ?", (user_id, product_id))
+        rows = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return rows > 0
+
+    @staticmethod
+    def clear_cart(user_id: int):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cart WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_cart_items(user_id: int) -> List[dict]:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT c.id as cart_id, c.quantity, p.*, s.name as shop_name
+            FROM cart c
+            JOIN products p ON c.product_id = p.id
+            JOIN shops s ON p.shop_id = s.id
+            WHERE c.user_id = ?
+            ORDER BY c.added_at DESC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def get_cart_count(user_id: int) -> int:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COALESCE(SUM(quantity), 0) as total FROM cart WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return row['total'] if row else 0
 
 
 class FavoriteRepository:

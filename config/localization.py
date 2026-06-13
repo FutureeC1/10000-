@@ -11,6 +11,7 @@ LOCALIZATION = {
         'btn_shops': "🏪 Магазины",
         'btn_orders': "📦 Мои заказы",
         'btn_favorites': "⭐ Избранное",
+        'btn_cart_menu': "🛒 Корзина",
         'btn_lang': "🌐 Язык / Til",
         
         # Выбор языка
@@ -86,6 +87,7 @@ LOCALIZATION = {
         'btn_shops': "🏪 Do'konlar",
         'btn_orders': "📦 Buyurtmalarim",
         'btn_favorites': "⭐ Sevimlilar",
+        'btn_cart_menu': "🛒 Savat",
         'btn_lang': "🌐 Til / Язык",
         
         # Выбор языка
