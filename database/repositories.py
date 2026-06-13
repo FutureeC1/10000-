@@ -1,7 +1,3 @@
-import warnings
-import warnings
-import warnings
-import warnings
 from database.connection import get_db_connection
 from typing import List, Dict, Any, Optional
 
@@ -760,10 +756,10 @@ def seed_default_data(admin_id: int):
 
     # Принудительно обновим существующие цены в БД на доллары, если они были сохранены в сумах
     import sqlite3
-    from config.config import DATABASE_PATH
-    conn = sqlite3.connect(DATABASE_PATH)
+    from config.config import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("UPDATE products SET price = 1150.0 WHERE shop_id = ? AND name = ? AND price > 100000", (gzb_id, "Игровой ПК GameZone Apex Elite"))
+    cursor.execute("UPDATE products SET price = 1170.0 WHERE shop_id = ? AND name = ? AND price > 100000", (gzb_id, "Готовая сборка с rtx5060 8gb"))
     conn.commit()
     conn.close()
 
