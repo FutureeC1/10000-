@@ -1,6 +1,7 @@
 import logging
 # pyrefly: ignore [missing-import]
 from aiogram import Router, F, Bot
+# pyrefly: ignore [missing-import]
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -19,7 +20,7 @@ from bot.keyboards.inline import (
 )
 from bot.states.user_states import OrderStates, SearchStates
 from services.order_service import create_new_order
-from config.localization import get_text, get_localized_category, get_localized_shop_desc
+from config.localization import get_text, get_localized_category, get_localized_shop_desc, get_localized_product_desc
 
 router = Router()
 
@@ -218,7 +219,7 @@ def format_product_text(product: dict, shop_name: str, lang: str = 'ru') -> str:
         f"🏪 {shop_label}: {shop_name}\n"
         f"{cat_label}: {get_localized_category(product['category'], lang)}\n"
         f"{stock_label}: {status_str}\n\n"
-        f"📝 <b>{desc_label}:</b>\n{product['description']}\n\n"
+        f"📝 <b>{desc_label}:</b>\n{get_localized_product_desc(product['name'], product['description'], lang)}\n\n"
         f"{price_text}"
     )
     return text
