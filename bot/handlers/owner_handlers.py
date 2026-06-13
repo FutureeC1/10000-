@@ -620,13 +620,34 @@ async def callback_own_order_detail(callback: CallbackQuery):
         await callback.answer("Заказ не найден.", show_alert=True)
         return
         
+    # Поддержка отображения нескольких товаров (режим корзины)
+    product_details = ""
+    price_details = ""
+    if order.get('items'):
+        import json
+        try:
+            items_list = json.loads(order['items'])
+            items_text = "\n".join([f"▫️ {item['name']} (x{item['quantity']})" for item in items_list])
+            product_details = f"📦 <b>Товары:</b>\n{items_text}\n"
+            
+            is_usd = "gamezone" in (order.get('shop_name', '')).lower()
+            total = order.get('total_price', 0)
+            total_str = f"${total:,.2f}" if is_usd else f"{total:,.0f} сум"
+            price_details = f"💰 <b>Итого:</b> {total_str}\n"
+        except Exception:
+            product_details = f"📦 <b>Товар:</b> {order['product_name']}\n"
+            price_details = f"💰 <b>Цена товара:</b> {order['product_price']:,} сум\n"
+    else:
+        product_details = f"📦 <b>Товар:</b> {order['product_name']}\n"
+        price_details = f"💰 <b>Цена товара:</b> {order['product_price']:,} сум\n"
+
     text = (
         f"📝 <b>Детали заказа #{order['id']}</b>\n\n"
         f"👤 <b>Покупатель:</b> {order['full_name']}\n"
         f"📞 <b>Телефон:</b> {order['phone']}\n"
         f"📍 <b>Адрес доставки:</b> {order['address']}\n\n"
-        f"📦 <b>Товар:</b> {order['product_name']}\n"
-        f"💰 <b>Цена товара:</b> {order['product_price']:,} сум\n"
+        f"{product_details}"
+        f"{price_details}"
         f"⏱ <b>Статус:</b> {order['status']}\n"
         f"📅 <b>Дата создания:</b> {order['created_at']}\n"
     )
@@ -677,13 +698,35 @@ async def callback_own_change_status(callback: CallbackQuery, bot: Bot):
     
     # Возвращаемся к просмотру деталей заказа
     updated_order = OrderRepository.get_order_by_id(order_id)
+    
+    # Поддержка отображения нескольких товаров (режим корзины)
+    product_details = ""
+    price_details = ""
+    if updated_order.get('items'):
+        import json
+        try:
+            items_list = json.loads(updated_order['items'])
+            items_text = "\n".join([f"▫️ {item['name']} (x{item['quantity']})" for item in items_list])
+            product_details = f"📦 <b>Товары:</b>\n{items_text}\n"
+            
+            is_usd = "gamezone" in (updated_order.get('shop_name', '')).lower()
+            total = updated_order.get('total_price', 0)
+            total_str = f"${total:,.2f}" if is_usd else f"{total:,.0f} сум"
+            price_details = f"💰 <b>Итого:</b> {total_str}\n"
+        except Exception:
+            product_details = f"📦 <b>Товар:</b> {updated_order['product_name']}\n"
+            price_details = f"💰 <b>Цена товара:</b> {updated_order['product_price']:,} сум\n"
+    else:
+        product_details = f"📦 <b>Товар:</b> {updated_order['product_name']}\n"
+        price_details = f"💰 <b>Цена товара:</b> {updated_order['product_price']:,} сум\n"
+
     text = (
         f"📝 <b>Детали заказа #{updated_order['id']}</b>\n\n"
         f"👤 <b>Покупатель:</b> {updated_order['full_name']}\n"
         f"📞 <b>Телефон:</b> {updated_order['phone']}\n"
         f"📍 <b>Адрес доставки:</b> {updated_order['address']}\n\n"
-        f"📦 <b>Товар:</b> {updated_order['product_name']}\n"
-        f"💰 <b>Цена товара:</b> {updated_order['product_price']:,} сум\n"
+        f"{product_details}"
+        f"{price_details}"
         f"⏱ <b>Статус:</b> {updated_order['status']}\n"
         f"📅 <b>Дата создания:</b> {updated_order['created_at']}\n"
     )

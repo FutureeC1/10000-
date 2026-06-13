@@ -222,9 +222,12 @@ def get_owner_orders_list_keyboard(orders: List[dict], shop_id: int, current_pag
     keyboard = []
     
     for order in orders:
+        total = order.get('total_price') or order.get('product_price', 0)
+        # Determine currency based on some logic if possible, or just print sum. 
+        # Inline buttons have limited space so just showing total is fine.
         keyboard.append([
             InlineKeyboardButton(
-                text=f"Заказ #{order['id']} - {order['status']} ({order['product_price']:,} сум)",
+                text=f"Заказ #{order['id']} - {order['status']} ({total:,.0f})",
                 callback_data=f"own_order_detail_{order['id']}"
             )
         ])

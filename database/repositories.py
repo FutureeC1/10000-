@@ -70,6 +70,13 @@ def init_db():
         )
     """)
     
+    # Пытаемся добавить колонки для корзины (для существующих баз)
+    try:
+        cursor.execute("ALTER TABLE orders ADD COLUMN items TEXT")
+        cursor.execute("ALTER TABLE orders ADD COLUMN total_price REAL")
+    except Exception:
+        pass
+    
     # 5. Таблица избранного
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS favorites (
@@ -393,13 +400,26 @@ class ProductRepository:
 class OrderRepository:
     @staticmethod
     def create_order(shop_id: int, user_id: int, full_name: str, phone: str, 
-                     address: str, product_id: int, status: str = 'Новый') -> int:
+                     address: str, product_id: int, status: str = 'Новый',
+                     items: Optional[str] = None, total_price: Optional[float] = None) -> int:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO orders (shop_id, user_id, full_name, phone, address, product_id, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (shop_id, user_id, full_name, phone, address, product_id, status))
+        
+        # Проверяем, существуют ли колонки items и total_price
+        cursor.execute("PRAGMA table_info(orders)")
+        columns = [col['name'] for col in cursor.fetchall()]
+        
+        if 'items' in columns and 'total_price' in columns:
+            cursor.execute("""
+                INSERT INTO orders (shop_id, user_id, full_name, phone, address, product_id, status, items, total_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (shop_id, user_id, full_name, phone, address, product_id, status, items, total_price))
+        else:
+            cursor.execute("""
+                INSERT INTO orders (shop_id, user_id, full_name, phone, address, product_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (shop_id, user_id, full_name, phone, address, product_id, status))
+            
         order_id = cursor.lastrowid
         conn.commit()
         conn.close()

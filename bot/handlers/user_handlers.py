@@ -20,7 +20,7 @@ from bot.keyboards.inline import (
     get_language_keyboard
 )
 from bot.states.user_states import OrderStates, SearchStates
-from services.order_service import create_new_order
+from services.order_service import create_new_order, create_multi_item_order
 from config.localization import get_text, get_localized_category, get_localized_shop_desc, get_localized_product_desc
 
 router = Router()
@@ -842,14 +842,29 @@ async def cmd_my_orders(message: Message):
         date_label = "Sana" if lang == 'uz' else "Дата"
         
         is_usd = "gamezone" in order['shop_name'].lower()
-        if is_usd:
-            order_price_str = f"${order['product_price']:,}"
+        
+        # Поддержка корзины
+        if order.get('items'):
+            import json
+            try:
+                items_list = json.loads(order['items'])
+                p_name = f"Корзина ({len(items_list)} позиций)" if lang == 'ru' else f"Savat ({len(items_list)} ta mahsulot)"
+                p_price = order.get('total_price', order['product_price'])
+            except Exception:
+                p_name = order['product_name']
+                p_price = order['product_price']
         else:
-            order_price_str = f"{order['product_price']:,} сум" if lang == 'ru' else f"{order['product_price']:,} so'm"
+            p_name = order['product_name']
+            p_price = order['product_price']
+
+        if is_usd:
+            order_price_str = f"${p_price:,.2f}"
+        else:
+            order_price_str = f"{p_price:,.0f} сум" if lang == 'ru' else f"{p_price:,.0f} so'm"
             
         text += (
             f"🔹 <b>Заказ #{order['id']} {order['shop_name']} {shop_label}</b>\n"
-            f"🛒 {item_label}: {order['product_name']}\n"
+            f"🛒 {item_label}: {p_name}\n"
             f"💰 {price_label}: {order_price_str}\n"
             f"⏱ {status_label}: {emoji} {status_val}\n"
             f"📅 {date_label}: {order['created_at']}\n\n"
@@ -1069,19 +1084,26 @@ async def process_order_confirm(callback: CallbackQuery, state: FSMContext):
             return
         
         order_ids = []
+        
+        # Группируем товары по магазинам
+        from collections import defaultdict
+        shop_items = defaultdict(list)
         for item in cart_items:
-            for _ in range(item['quantity']):
-                oid = await create_new_order(
-                    bot=callback.bot,
-                    shop_id=item['shop_id'],
-                    user_id=user_id,
-                    full_name=data['name'],
-                    phone=data['phone'],
-                    address=data['address'],
-                    product_id=item['id']
-                )
-                if oid:
-                    order_ids.append(oid)
+            shop_items[item['shop_id']].append(item)
+            
+        # Создаем один заказ на каждый магазин
+        for shop_id, items in shop_items.items():
+            oid = await create_multi_item_order(
+                bot=callback.bot,
+                shop_id=shop_id,
+                user_id=user_id,
+                full_name=data['name'],
+                phone=data['phone'],
+                address=data['address'],
+                items=items
+            )
+            if oid:
+                order_ids.append(oid)
         
         CartRepository.clear_cart(user_id)
         
