@@ -1,6 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from database.repositories import UserRepository
-from config.localization import get_text
+from config.localization import get_text, get_localized_category
 
 def get_main_menu(user_id: int) -> ReplyKeyboardMarkup:
     """Генерирует главное Reply-меню клиента."""
@@ -24,7 +24,7 @@ def get_shop_menu_keyboard(categories: list, lang: str = 'ru') -> ReplyKeyboardM
     for i in range(0, len(categories), 2):
         row = []
         for cat in categories[i:i+2]:
-            row.append(KeyboardButton(text=cat))
+            row.append(KeyboardButton(text=get_localized_category(cat, lang)))
         keyboard_buttons.append(row)
         
     # Добавляем функциональные кнопки

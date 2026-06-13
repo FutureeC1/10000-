@@ -19,7 +19,7 @@ from bot.keyboards.inline import (
 )
 from bot.states.user_states import OrderStates, SearchStates
 from services.order_service import create_new_order
-from config.localization import get_text
+from config.localization import get_text, get_localized_category, get_localized_shop_desc
 
 router = Router()
 
@@ -150,7 +150,7 @@ async def callback_select_shop(callback: CallbackQuery, state: FSMContext):
         await callback.answer(no_products_text, show_alert=True)
         return
         
-    text = get_text('shop_title', lang, name=shop['name'], description=shop['description'] or ('Описание отсутствует.' if lang == 'ru' else 'Tavsif mavjud emas.'))
+    text = get_text('shop_title', lang, name=shop['name'], description=get_localized_shop_desc(shop['name'], shop['description'], lang) or ('Описание отсутствует.' if lang == 'ru' else 'Tavsif mavjud emas.'))
     
     try:
         await callback.message.delete()
@@ -216,7 +216,7 @@ def format_product_text(product: dict, shop_name: str, lang: str = 'ru') -> str:
     text = (
         f"🎮 <b>{product['name']}</b>\n"
         f"🏪 {shop_label}: {shop_name}\n"
-        f"{cat_label}: {product['category']}\n"
+        f"{cat_label}: {get_localized_category(product['category'], lang)}\n"
         f"{stock_label}: {status_str}\n\n"
         f"📝 <b>{desc_label}:</b>\n{product['description']}\n\n"
         f"{price_text}"
@@ -931,8 +931,14 @@ async def process_shop_menu_click(message: Message, state: FSMContext):
         categories = ProductRepository.get_categories_by_shop(shop_id)
         
         # 1. Если кликнули по категории
-        if text in categories:
-            await show_category_products(message, shop_id, text, state)
+        matched_category = None
+        for cat in categories:
+            if text == get_localized_category(cat, lang) or text == cat:
+                matched_category = cat
+                break
+                
+        if matched_category:
+            await show_category_products(message, shop_id, matched_category, state)
             return
             
         # 2. Если кликнули по поиску

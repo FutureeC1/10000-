@@ -159,3 +159,47 @@ def get_text(key: str, lang: str = 'ru', **kwargs) -> str:
         return text_template.format(**kwargs)
     except Exception:
         return text_template
+
+
+CATEGORIES_TRANSLATION = {
+    'ru': {
+        'Клавиатуры': 'Клавиатуры',
+        'Коврики': 'Коврики',
+        'Мышки': 'Мышки',
+        'Наушники': 'Наушники',
+        'Готовые ПК': 'Готовые ПК',
+        'Видеокарты': 'Видеокарты',
+        'Процессоры': 'Процессоры',
+    },
+    'uz': {
+        'Клавиатуры': 'Klaviaturalar',
+        'Коврики': 'Kovriklar',
+        'Мышки': 'Sichqonchalar',
+        'Наушники': 'Quloqchinlar',
+        'Готовые ПК': 'Tayyor PKlar',
+        'Видеокарты': 'Videokartalar',
+        'Процессоры': 'Protsessorlar',
+    }
+}
+
+SHOP_DESC_TRANSLATION = {
+    'Keyllect': {
+        'ru': 'Магазин игровых аксессуаров премиум-класса. Клавиатуры, мышки, наушники, коврики.',
+        'uz': "Premium darajadagi o'yin aksessuarlari do'koni. Klaviaturalar, sichqonchalar, quloqchinlar, kovriklar."
+    },
+    'GameZoneBuild': {
+        'ru': 'Готовые игровые ПК, сборка компьютеров под заказ и качественные комплектующие.',
+        'uz': "Tayyor o'yin shaxsiy kompyuterlari, buyurtma asosida kompyuter yig'ish va sifatli butlovchi qismlar."
+    }
+}
+
+def get_localized_category(category_name: str, lang: str = 'ru') -> str:
+    """Возвращает переведенное название категории."""
+    lang_dict = CATEGORIES_TRANSLATION.get(lang, CATEGORIES_TRANSLATION['ru'])
+    return lang_dict.get(category_name, category_name)
+
+def get_localized_shop_desc(shop_name: str, default_desc: str, lang: str = 'ru') -> str:
+    """Возвращает переведенное описание магазина."""
+    if shop_name in SHOP_DESC_TRANSLATION:
+        return SHOP_DESC_TRANSLATION[shop_name].get(lang, default_desc)
+    return default_desc

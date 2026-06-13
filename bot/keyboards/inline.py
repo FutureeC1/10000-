@@ -1,7 +1,7 @@
 # pyrefly: ignore [missing-import]
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List
-from config.localization import get_text
+from config.localization import get_text, get_localized_category
 
 def get_language_keyboard() -> InlineKeyboardMarkup:
     """Генерирует клавиатуру выбора языка (Русский / O'zbekcha)."""
@@ -27,7 +27,7 @@ def get_shop_categories_keyboard(shop_id: int, categories: List[str], lang: str 
     for i in range(0, len(categories), 2):
         row = []
         for cat in categories[i:i+2]:
-            row.append(InlineKeyboardButton(text=cat, callback_data=f"shopcat_{shop_id}_{cat}"))
+            row.append(InlineKeyboardButton(text=get_localized_category(cat, lang), callback_data=f"shopcat_{shop_id}_{cat}"))
         keyboard.append(row)
         
     keyboard.append([InlineKeyboardButton(text=get_text('btn_search', lang), callback_data=f"shopsearch_{shop_id}")])
